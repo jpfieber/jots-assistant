@@ -1,0 +1,10 @@
+{
+	"id": "jots",
+	"name": "JOTS",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "A plugin for managing quick notes and thoughts",
+	"author": "Joseph Fieber",
+	"authorUrl": "https://github.com/yourusername",
+	"isDesktopOnly": false
+}
