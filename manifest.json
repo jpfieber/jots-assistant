@@ -1,6 +1,6 @@
 {
-	"id": "jots-concierge",
-	"name": "JOTS Concierge",
+	"id": "jots-assistant",
+	"name": "JOTS Assistant",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "A plugin for managing quick notes and thoughts",
