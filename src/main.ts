@@ -10,12 +10,12 @@ export default class JotsPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// Create and inject the style element
+		// Create and inject the style element for dynamic styles
 		this.styleEl = document.createElement('style');
 		this.styleEl.setAttribute('type', 'text/css');
 		document.head.appendChild(this.styleEl);
 
-		// Set initial styles
+		// Set initial dynamic styles
 		this.updateStyles();
 
 		// Register commands

@@ -1,0 +1,96 @@
+.jots-settings-tabs {
+    padding-top: 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 12px;
+}
+
+.jots-settings-tab {
+    margin-bottom: -1px;
+    padding: 6px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-block;
+    border: 1px solid transparent;
+    border-radius: 4px 4px 0 0;
+}
+
+.jots-settings-tab.is-active {
+    border: 1px solid var(--background-modifier-border);
+    border-bottom-color: var(--background-primary);
+    color: var(--text-accent);
+}
+
+.jots-settings-content:not(.is-active) {
+    display: none;
+}
+
+.jots-dependency-power {
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.8;
+    transform: scale(1.2);
+}
+
+.jots-dependency-power.is-active {
+    color: var(--color-green);
+    opacity: 1;
+    text-shadow: 0 0 8px var(--color-green);
+}
+
+.jots-dependency-power.is-inactive {
+    color: var(--color-red);
+    opacity: 1;
+    text-shadow: 0 0 8px var(--color-red);
+}
+
+.jots-dependency-container {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.jots-status {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.jots-status-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    width: 85px;
+}
+
+.jots-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--background-primary);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.jots-status-success {
+    background-color: var(--color-green);
+}
+
+.jots-status-error {
+    background-color: var(--color-red);
+}
+
+.jots-status-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.jots-status-description {
+    font-size: 12px;
+    color: var(--text-muted);
+}

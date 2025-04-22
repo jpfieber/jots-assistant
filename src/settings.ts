@@ -14,6 +14,11 @@ export interface JotsSettings {
     journalFilePattern: string;
 }
 
+interface DependencyState {
+    isInstalled: boolean;
+    isEnabled: boolean;
+}
+
 export const DEFAULT_SETTINGS: JotsSettings = {
     sectionName: 'JOTS',
     sectionIcon: `<svg enable-background="new 0 0 512 512" version="1.1" viewBox="0 0 512 512" xml:space="preserve" xmlns="http://www.w3.org/2000/svg">
@@ -31,21 +36,160 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     journalFilePattern: 'YYYY-MM-DD_ddd'
 }
 
+interface SettingsTab {
+    id: string;
+    name: string;
+    content: HTMLElement;
+}
+
 export class JotsSettingTab extends PluginSettingTab {
     plugin: JotsPlugin;
+    tabs: SettingsTab[] = [];
+    activeTab: string = 'jots';
+    private dependencyState: { [key: string]: DependencyState } = {};
 
     constructor(app: App, plugin: JotsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
 
+    private async checkDependencies() {
+        // Check if Dataview is installed and enabled
+        //@ts-ignore - Access internal Obsidian API
+        const dataviewPlugin = (this.app as any).plugins?.getPlugin('dataview');
+        const isInstalled = dataviewPlugin !== undefined;
+        //@ts-ignore - Access internal Obsidian API
+        const isEnabled = isInstalled && (this.app as any).plugins?.enabledPlugins.has('dataview');
+
+        this.dependencyState['dataview'] = {
+            isInstalled,
+            isEnabled
+        };
+    }
+
+    private async openPluginBrowser(pluginId: string) {
+        // Open community plugins browser
+        //@ts-ignore - Access internal Obsidian API
+        await (this.app as any).setting?.openTabById('community-plugins');
+        //@ts-ignore - Access internal Obsidian API
+        const communityPluginsTab = (this.app as any).setting?.activeTab;
+        if (communityPluginsTab) {
+            const searchEl = (communityPluginsTab.containerEl.querySelector('.search-input-container input') as HTMLInputElement);
+            if (searchEl) {
+                searchEl.value = pluginId;
+                searchEl.dispatchEvent(new Event('input'));
+            }
+        }
+    }
+
+    createTab(id: string, name: string): HTMLElement {
+        const content = document.createElement('div');
+        content.addClass('jots-settings-content');
+        if (id === this.activeTab) {
+            content.addClass('is-active');
+        }
+        this.tabs.push({ id, name, content });
+        return content;
+    }
+
+    async setActiveTab(tabId: string): Promise<void> {
+        this.activeTab = tabId;
+
+        // Remove active class from all tabs and contents
+        this.tabs.forEach(tab => {
+            tab.content.removeClass('is-active');
+        });
+
+        // Remove active class from all tab buttons
+        const allTabButtons = this.containerEl.querySelectorAll('.jots-settings-tab');
+        allTabButtons.forEach(button => button.removeClass('is-active'));
+
+        // Add active class to selected tab and content
+        const activeTab = this.tabs.find(tab => tab.id === tabId);
+        if (activeTab) {
+            activeTab.content.addClass('is-active');
+
+            // Find the active button using data attribute
+            const activeButton = this.containerEl.querySelector(`[data-tab-id="${tabId}"]`);
+            if (activeButton) {
+                activeButton.addClass('is-active');
+            }
+
+            // Clear and recreate content for the active tab
+            activeTab.content.empty();
+            if (tabId === 'jots') {
+                await this.createJotsTab(activeTab.content);
+            } else if (tabId === 'appearance') {
+                this.createAppearanceSettings(activeTab.content);
+            } else if (tabId === 'journal') {
+                this.createJournalSettings(activeTab.content);
+            }
+        }
+    }
+
     display(): void {
         const { containerEl } = this;
-
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Jots Settings' });
+        containerEl.createEl('h2', { text: 'JOTS Settings' });
 
+        // Create tabs container
+        const tabsContainer = containerEl.createEl('div', { cls: 'jots-settings-tabs' });
+
+        // Clear existing tabs
+        this.tabs = [];
+
+        // Create tab buttons
+        const jotsTab = this.createTab('jots', 'JOTS');
+        const appearanceTab = this.createTab('appearance', 'JOTS Appearance');
+        const journalTab = this.createTab('journal', 'Journal Settings');
+
+        // Add tab buttons with data attributes
+        this.tabs.forEach(tab => {
+            const tabButton = tabsContainer.createEl('div', {
+                cls: `jots-settings-tab ${tab.id === this.activeTab ? 'is-active' : ''}`,
+                text: tab.name
+            });
+            // Add data attribute for identification
+            tabButton.setAttribute('data-tab-id', tab.id);
+            tabButton.addEventListener('click', () => this.setActiveTab(tab.id));
+        });
+
+        // Add tabs content to container
+        this.tabs.forEach(tab => {
+            containerEl.appendChild(tab.content);
+        });
+
+        // Initialize the active tab
+        this.setActiveTab(this.activeTab);
+    }
+
+    async createJotsTab(containerEl: HTMLElement): Promise<void> {
+        await this.checkDependencies();
+
+        containerEl.createEl('h3', { text: 'Dependencies' });
+
+        // Create the setting with just the power button
+        const settingItem = new Setting(containerEl)
+            .setName('Dataview Plugin')
+            .setDesc('Required for advanced JOTS features');
+
+        const isInstalled = this.dependencyState['dataview']?.isInstalled;
+        const isEnabled = this.dependencyState['dataview']?.isEnabled;
+        const isActive = isInstalled && isEnabled;
+
+        // Add power button with appropriate state
+        settingItem.addExtraButton(button => {
+            button
+                .setIcon('power')
+                .setTooltip(isActive ? 'Dataview is installed and enabled' : 'Dataview needs attention')
+                .extraSettingsEl.addClass('jots-dependency-power', isActive ? 'is-active' : 'is-inactive');
+
+            button.onClick(() => this.openPluginBrowser('dataview'));
+        });
+    }
+
+    createAppearanceSettings(containerEl: HTMLElement): void {
         new Setting(containerEl)
             .setName('JOTS Section Name')
             .setDesc('The name of the section that will contain your JOTS')
@@ -116,9 +260,9 @@ export class JotsSettingTab extends PluginSettingTab {
 
                     await this.plugin.saveSettings();
                 }));
+    }
 
-        containerEl.createEl('h3', { text: 'Journal Settings' });
-
+    createJournalSettings(containerEl: HTMLElement): void {
         new Setting(containerEl)
             .setName('Journal Root Folder')
             .setDesc('The root folder where journals are stored')

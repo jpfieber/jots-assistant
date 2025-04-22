@@ -67,12 +67,27 @@ export function generateJotsIconCss(sectionName: string, svgData: string, labelC
     return `.callout[data-callout="${sectionName.toLowerCase()}"] {
     --callout-color: ${labelColor};
     --callout-title-color: ${labelColor};
+    margin: 0;
+    padding: 0;
+    position: relative;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title {
     color: ${labelColor};
+    margin: 0;
+    padding: 0;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title > .callout-title-inner {
     color: ${labelColor};
+}
+.callout[data-callout="${sectionName.toLowerCase()}"] > .callout-content {
+    margin: 0;
+    padding: 0 0 0 1em;
+    position: relative;
+}
+.callout[data-callout="${sectionName.toLowerCase()}"] .callout-content blockquote {
+    margin: 0;
+    padding: 0;
+    border: none;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title > .callout-icon {
     display: flex;

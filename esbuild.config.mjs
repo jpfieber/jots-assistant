@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import fs from "fs";
 
 const banner =
 	`/*
@@ -38,6 +39,16 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
 	outfile: 'dist/main.js',
+	plugins: [{
+		name: 'css',
+		setup(build) {
+			build.onEnd(() => {
+				// Copy styles.css to dist folder
+				fs.copyFileSync('src/styles.css', 'dist/styles.css');
+				console.log('Copied styles.css to dist folder');
+			});
+		},
+	}],
 });
 
 if (prod) {

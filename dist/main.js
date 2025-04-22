@@ -4052,12 +4052,102 @@ var DEFAULT_SETTINGS = {
 var JotsSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.tabs = [];
+    this.activeTab = "jots";
+    this.dependencyState = {};
     this.plugin = plugin;
+  }
+  async checkDependencies() {
+    var _a, _b;
+    const dataviewPlugin = (_a = this.app.plugins) == null ? void 0 : _a.getPlugin("dataview");
+    const isInstalled = dataviewPlugin !== void 0;
+    const isEnabled = isInstalled && ((_b = this.app.plugins) == null ? void 0 : _b.enabledPlugins.has("dataview"));
+    this.dependencyState["dataview"] = {
+      isInstalled,
+      isEnabled
+    };
+  }
+  async openPluginBrowser(pluginId) {
+    var _a, _b;
+    await ((_a = this.app.setting) == null ? void 0 : _a.openTabById("community-plugins"));
+    const communityPluginsTab = (_b = this.app.setting) == null ? void 0 : _b.activeTab;
+    if (communityPluginsTab) {
+      const searchEl = communityPluginsTab.containerEl.querySelector(".search-input-container input");
+      if (searchEl) {
+        searchEl.value = pluginId;
+        searchEl.dispatchEvent(new Event("input"));
+      }
+    }
+  }
+  createTab(id, name) {
+    const content = document.createElement("div");
+    content.addClass("jots-settings-content");
+    if (id === this.activeTab) {
+      content.addClass("is-active");
+    }
+    this.tabs.push({ id, name, content });
+    return content;
+  }
+  async setActiveTab(tabId) {
+    this.activeTab = tabId;
+    this.tabs.forEach((tab) => {
+      tab.content.removeClass("is-active");
+    });
+    const allTabButtons = this.containerEl.querySelectorAll(".jots-settings-tab");
+    allTabButtons.forEach((button) => button.removeClass("is-active"));
+    const activeTab = this.tabs.find((tab) => tab.id === tabId);
+    if (activeTab) {
+      activeTab.content.addClass("is-active");
+      const activeButton = this.containerEl.querySelector(`[data-tab-id="${tabId}"]`);
+      if (activeButton) {
+        activeButton.addClass("is-active");
+      }
+      activeTab.content.empty();
+      if (tabId === "jots") {
+        await this.createJotsTab(activeTab.content);
+      } else if (tabId === "appearance") {
+        this.createAppearanceSettings(activeTab.content);
+      } else if (tabId === "journal") {
+        this.createJournalSettings(activeTab.content);
+      }
+    }
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Jots Settings" });
+    containerEl.createEl("h2", { text: "JOTS Settings" });
+    const tabsContainer = containerEl.createEl("div", { cls: "jots-settings-tabs" });
+    this.tabs = [];
+    const jotsTab = this.createTab("jots", "JOTS");
+    const appearanceTab = this.createTab("appearance", "JOTS Appearance");
+    const journalTab = this.createTab("journal", "Journal Settings");
+    this.tabs.forEach((tab) => {
+      const tabButton = tabsContainer.createEl("div", {
+        cls: `jots-settings-tab ${tab.id === this.activeTab ? "is-active" : ""}`,
+        text: tab.name
+      });
+      tabButton.setAttribute("data-tab-id", tab.id);
+      tabButton.addEventListener("click", () => this.setActiveTab(tab.id));
+    });
+    this.tabs.forEach((tab) => {
+      containerEl.appendChild(tab.content);
+    });
+    this.setActiveTab(this.activeTab);
+  }
+  async createJotsTab(containerEl) {
+    var _a, _b;
+    await this.checkDependencies();
+    containerEl.createEl("h3", { text: "Dependencies" });
+    const settingItem = new import_obsidian.Setting(containerEl).setName("Dataview Plugin").setDesc("Required for advanced JOTS features");
+    const isInstalled = (_a = this.dependencyState["dataview"]) == null ? void 0 : _a.isInstalled;
+    const isEnabled = (_b = this.dependencyState["dataview"]) == null ? void 0 : _b.isEnabled;
+    const isActive = isInstalled && isEnabled;
+    settingItem.addExtraButton((button) => {
+      button.setIcon("power").setTooltip(isActive ? "Dataview is installed and enabled" : "Dataview needs attention").extraSettingsEl.addClass("jots-dependency-power", isActive ? "is-active" : "is-inactive");
+      button.onClick(() => this.openPluginBrowser("dataview"));
+    });
+  }
+  createAppearanceSettings(containerEl) {
     new import_obsidian.Setting(containerEl).setName("JOTS Section Name").setDesc("The name of the section that will contain your JOTS").addText((text) => text.setPlaceholder("JOTS").setValue(this.plugin.settings.sectionName).onChange(async (value) => {
       this.plugin.settings.sectionName = value;
       await this.plugin.saveSettings();
@@ -4083,7 +4173,8 @@ var JotsSettingTab = class extends import_obsidian.PluginSettingTab {
       }
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "Journal Settings" });
+  }
+  createJournalSettings(containerEl) {
     new import_obsidian.Setting(containerEl).setName("Journal Root Folder").setDesc("The root folder where journals are stored").addText((text) => text.setPlaceholder("Journals").setValue(this.plugin.settings.journalRootFolder).onChange(async (value) => {
       this.plugin.settings.journalRootFolder = value;
       await this.plugin.saveSettings();
@@ -4438,12 +4529,27 @@ function generateJotsIconCss(sectionName, svgData, labelColor) {
   return `.callout[data-callout="${sectionName.toLowerCase()}"] {
     --callout-color: ${labelColor};
     --callout-title-color: ${labelColor};
+    margin: 0;
+    padding: 0;
+    position: relative;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title {
     color: ${labelColor};
+    margin: 0;
+    padding: 0;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title > .callout-title-inner {
     color: ${labelColor};
+}
+.callout[data-callout="${sectionName.toLowerCase()}"] > .callout-content {
+    margin: 0;
+    padding: 0 0 0 1em;
+    position: relative;
+}
+.callout[data-callout="${sectionName.toLowerCase()}"] .callout-content blockquote {
+    margin: 0;
+    padding: 0;
+    border: none;
 }
 .callout[data-callout="${sectionName.toLowerCase()}"] > .callout-title > .callout-icon {
     display: flex;
