@@ -1,5 +1,5 @@
 {
-  "name": "jots",
+  "name": "jots-concierge",
   "version": "1.0.0",
   "description": "An Obsidian plugin",
   "main": "dist/main.js",
