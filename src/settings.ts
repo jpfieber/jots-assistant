@@ -131,8 +131,6 @@ export class JotsSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'JOTS Settings' });
-
         // Create tabs container
         const tabsContainer = containerEl.createEl('div', { cls: 'jots-settings-tabs' });
 
@@ -140,9 +138,9 @@ export class JotsSettingTab extends PluginSettingTab {
         this.tabs = [];
 
         // Create tab buttons
-        const jotsTab = this.createTab('jots', 'JOTS');
-        const appearanceTab = this.createTab('appearance', 'JOTS Appearance');
-        const journalTab = this.createTab('journal', 'Journal Settings');
+        const jotsTab = this.createTab('jots', 'General');
+        const appearanceTab = this.createTab('appearance', 'Appearance');
+        const journalTab = this.createTab('journal', 'Journals');
 
         // Add tab buttons with data attributes
         this.tabs.forEach(tab => {
@@ -190,9 +188,15 @@ export class JotsSettingTab extends PluginSettingTab {
     }
 
     createAppearanceSettings(containerEl: HTMLElement): void {
+        containerEl.createEl('p', {
+            text: 'The following settings alter the appearance of the callout that will be created to hold your Jots.'
+        }).addClass('setting-item-description', 'jots-settings-description');
+
+        containerEl.createEl('hr');
+
         new Setting(containerEl)
             .setName('JOTS Section Name')
-            .setDesc('The name of the section that will contain your JOTS')
+            .setDesc('The name of the callout/section that will contain your Jots')
             .addText(text => text
                 .setPlaceholder('JOTS')
                 .setValue(this.plugin.settings.sectionName)
@@ -203,7 +207,7 @@ export class JotsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Label Color')
-            .setDesc('The color of the JOTS section label')
+            .setDesc('The color of the JOTS callout/section label')
             .addColorPicker(color => color
                 .setValue(this.plugin.settings.labelColor)
                 .onChange(async (value) => {
@@ -213,9 +217,9 @@ export class JotsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('JOTS Section Icon')
-            .setDesc('SVG icon data string for the section (must be valid SVG XML)')
+            .setDesc('SVG icon data string for the callout/section (must be valid SVG XML)')
             .addTextArea(text => text
-                .setPlaceholder('<?xml version="1.0" encoding="UTF-8"?><svg>...</svg>')
+                .setPlaceholder('<svg>...</svg>')
                 .setValue(this.plugin.settings.sectionIcon)
                 .onChange(async (value) => {
                     this.plugin.settings.sectionIcon = value;
@@ -224,7 +228,7 @@ export class JotsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('JOTS Section Format')
-            .setDesc('How the JOTS section should be formatted')
+            .setDesc('How the JOTS callout/section should behave')
             .addDropdown(dropdown => dropdown
                 .addOption('Plain', 'Plain')
                 .addOption('Foldable-Open', 'Foldable (Open by default)')
@@ -237,7 +241,7 @@ export class JotsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Task Letters')
-            .setDesc('Letters to look for in tasks (comma-separated, e.g. "A,B,C"). The JOTS header will only be added to notes containing tasks with these letters. Case-insensitive.')
+            .setDesc('Letters to look for in custom tasks (comma-separated, e.g. "A,B,C"). The JOTS header will only be added to notes containing tasks with these letters. Case-insensitive.')
             .addText(text => text
                 .setPlaceholder('A,B,C')
                 .setValue(this.plugin.settings.taskLetters.join(','))
@@ -263,6 +267,12 @@ export class JotsSettingTab extends PluginSettingTab {
     }
 
     createJournalSettings(containerEl: HTMLElement): void {
+        containerEl.createEl('p', {
+            text: 'Enter the following information so we know how to find your Daily Journals. This is necessary to add the "Jots Callout" which is where your Jots will be stored.'
+        }).addClass('setting-item-description', 'jots-settings-description');
+
+        containerEl.createEl('hr');
+
         new Setting(containerEl)
             .setName('Journal Root Folder')
             .setDesc('The root folder where journals are stored')

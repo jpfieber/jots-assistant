@@ -4115,12 +4115,11 @@ var JotsSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "JOTS Settings" });
     const tabsContainer = containerEl.createEl("div", { cls: "jots-settings-tabs" });
     this.tabs = [];
-    const jotsTab = this.createTab("jots", "JOTS");
-    const appearanceTab = this.createTab("appearance", "JOTS Appearance");
-    const journalTab = this.createTab("journal", "Journal Settings");
+    const jotsTab = this.createTab("jots", "General");
+    const appearanceTab = this.createTab("appearance", "Appearance");
+    const journalTab = this.createTab("journal", "Journals");
     this.tabs.forEach((tab) => {
       const tabButton = tabsContainer.createEl("div", {
         cls: `jots-settings-tab ${tab.id === this.activeTab ? "is-active" : ""}`,
@@ -4148,23 +4147,27 @@ var JotsSettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   createAppearanceSettings(containerEl) {
-    new import_obsidian.Setting(containerEl).setName("JOTS Section Name").setDesc("The name of the section that will contain your JOTS").addText((text) => text.setPlaceholder("JOTS").setValue(this.plugin.settings.sectionName).onChange(async (value) => {
+    containerEl.createEl("p", {
+      text: "The following settings alter the appearance of the callout that will be created to hold your Jots."
+    }).addClass("setting-item-description", "jots-settings-description");
+    containerEl.createEl("hr");
+    new import_obsidian.Setting(containerEl).setName("JOTS Section Name").setDesc("The name of the callout/section that will contain your Jots").addText((text) => text.setPlaceholder("JOTS").setValue(this.plugin.settings.sectionName).onChange(async (value) => {
       this.plugin.settings.sectionName = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Label Color").setDesc("The color of the JOTS section label").addColorPicker((color) => color.setValue(this.plugin.settings.labelColor).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("Label Color").setDesc("The color of the JOTS callout/section label").addColorPicker((color) => color.setValue(this.plugin.settings.labelColor).onChange(async (value) => {
       this.plugin.settings.labelColor = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("JOTS Section Icon").setDesc("SVG icon data string for the section (must be valid SVG XML)").addTextArea((text) => text.setPlaceholder('<?xml version="1.0" encoding="UTF-8"?><svg>...</svg>').setValue(this.plugin.settings.sectionIcon).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("JOTS Section Icon").setDesc("SVG icon data string for the callout/section (must be valid SVG XML)").addTextArea((text) => text.setPlaceholder("<svg>...</svg>").setValue(this.plugin.settings.sectionIcon).onChange(async (value) => {
       this.plugin.settings.sectionIcon = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("JOTS Section Format").setDesc("How the JOTS section should be formatted").addDropdown((dropdown) => dropdown.addOption("Plain", "Plain").addOption("Foldable-Open", "Foldable (Open by default)").addOption("Foldable-Closed", "Foldable (Closed by default)").setValue(this.plugin.settings.sectionFormat).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("JOTS Section Format").setDesc("How the JOTS callout/section should behave").addDropdown((dropdown) => dropdown.addOption("Plain", "Plain").addOption("Foldable-Open", "Foldable (Open by default)").addOption("Foldable-Closed", "Foldable (Closed by default)").setValue(this.plugin.settings.sectionFormat).onChange(async (value) => {
       this.plugin.settings.sectionFormat = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Task Letters").setDesc('Letters to look for in tasks (comma-separated, e.g. "A,B,C"). The JOTS header will only be added to notes containing tasks with these letters. Case-insensitive.').addText((text) => text.setPlaceholder("A,B,C").setValue(this.plugin.settings.taskLetters.join(",")).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("Task Letters").setDesc('Letters to look for in custom tasks (comma-separated, e.g. "A,B,C"). The JOTS header will only be added to notes containing tasks with these letters. Case-insensitive.').addText((text) => text.setPlaceholder("A,B,C").setValue(this.plugin.settings.taskLetters.join(",")).onChange(async (value) => {
       const letters = value.split(",").map((letter) => letter.trim().toUpperCase()).filter((letter) => letter.length > 0);
       const validLetters = letters.filter((letter) => /^[A-Z]$/.test(letter));
       this.plugin.settings.taskLetters = validLetters;
@@ -4175,6 +4178,10 @@ var JotsSettingTab = class extends import_obsidian.PluginSettingTab {
     }));
   }
   createJournalSettings(containerEl) {
+    containerEl.createEl("p", {
+      text: "Enter the following information so we know where your Daily Journals are and can modify them as needed."
+    }).addClass("setting-item-description", "jots-settings-description");
+    containerEl.createEl("hr");
     new import_obsidian.Setting(containerEl).setName("Journal Root Folder").setDesc("The root folder where journals are stored").addText((text) => text.setPlaceholder("Journals").setValue(this.plugin.settings.journalRootFolder).onChange(async (value) => {
       this.plugin.settings.journalRootFolder = value;
       await this.plugin.saveSettings();

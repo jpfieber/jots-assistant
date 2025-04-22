@@ -94,3 +94,10 @@
     font-size: 12px;
     color: var(--text-muted);
 }
+
+.jots-settings-description {
+    font-size: 1em;
+    line-height: 1;
+    margin: 12px 0;
+    color: var(--text-normal);
+}
