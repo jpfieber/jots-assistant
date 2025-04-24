@@ -1,9 +1,10 @@
 # JOTS Assistant
 
-JOTS Section Manager
-- Creates a callout to hold Jots
-- Migrates existing Jots into the JOTS Section
-- Sorts Jots within JOTS Section
+- Dependency Checker
+- JOTS Section Manager
+  - Creates a callout to hold Jots
+  - Migrates existing Jots into the JOTS Section
+  - Sorts Jots within JOTS Section
 
 ## Settings
 
