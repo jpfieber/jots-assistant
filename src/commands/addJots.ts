@@ -103,25 +103,35 @@ export class AddJotsCommand implements Command {
     }
 
     isTaskInCallout(lines: string[], taskLineIndex: number): boolean {
-        // Search backwards from the task line
+        // Search backwards from the task line to find the nearest callout header
+        let nearestCalloutStart = -1;
+        let nearestCalloutEnd = -1;
+
+        // Find the nearest callout header before this task
         for (let i = taskLineIndex - 1; i >= 0; i--) {
             const line = lines[i].trim();
-
-            // If we find a callout header
             if (line.match(/^>\s*\[!.*\]/)) {
-                // Check all lines between header and task start with ">"
-                for (let j = i + 1; j <= taskLineIndex; j++) {
-                    if (!lines[j].trimStart().startsWith('>')) {
-                        return false;
-                    }
+                nearestCalloutStart = i;
+                break;
+            }
+        }
+
+        // If we found a callout header before this task
+        if (nearestCalloutStart !== -1) {
+            // Find where this callout ends (first non-quoted line after the header)
+            for (let i = nearestCalloutStart + 1; i < lines.length; i++) {
+                if (!lines[i].trimStart().startsWith('>')) {
+                    nearestCalloutEnd = i - 1;
+                    break;
                 }
-                return true;
+                // If we reach the end of the file, the callout extends to the end
+                if (i === lines.length - 1) {
+                    nearestCalloutEnd = i;
+                }
             }
 
-            // If we find a line that doesn't start with ">", task is not in a callout
-            if (!line.startsWith('>')) {
-                return false;
-            }
+            // Check if our task falls within this callout's range
+            return taskLineIndex > nearestCalloutStart && taskLineIndex <= nearestCalloutEnd;
         }
 
         return false;
@@ -194,51 +204,75 @@ export class AddJotsCommand implements Command {
         const existingCalloutIndex = this.findExistingCalloutIndex(lines);
         let changed = false;
 
+        // First, remove the tasks from their original locations
+        // Sort indices in reverse order to maintain correct positions during removal
+        const taskIndices = tasksToMove.map(task => task.index).sort((a, b) => b - a);
+
+        // Remove tasks and their adjacent empty lines
+        let removedLines = 0;
+        for (const index of taskIndices) {
+            const adjustedIndex = index - removedLines;
+
+            // Check and remove previous empty line
+            if (adjustedIndex > 0 && lines[adjustedIndex - 1].trim() === '') {
+                lines.splice(adjustedIndex - 1, 1);
+                removedLines++;
+            }
+
+            // Remove the task line itself
+            lines.splice(adjustedIndex - removedLines, 1);
+            removedLines++;
+
+            // Check and remove next empty line
+            if (adjustedIndex - removedLines < lines.length && lines[adjustedIndex - removedLines]?.trim() === '') {
+                lines.splice(adjustedIndex - removedLines, 1);
+                removedLines++;
+            }
+        }
+
+        // Now handle the callout section
         if (existingCalloutIndex !== -1) {
-            // Check and update callout format if needed
-            changed = this.updateCalloutFormat(lines, existingCalloutIndex);
+            // Find the end of the callout section
+            let calloutEndIndex = existingCalloutIndex;
+            for (let i = existingCalloutIndex + 1; i < lines.length; i++) {
+                if (!lines[i].trimStart().startsWith('>')) {
+                    calloutEndIndex = i - 1;
+                    break;
+                }
+                if (i === lines.length - 1) {
+                    calloutEndIndex = i;
+                }
+            }
 
-            // Find existing tasks in the callout
-            let calloutEndIndex = existingCalloutIndex + 1;
+            // Extract existing tasks from the callout
             const existingTasks: TaskWithTime[] = [];
-
-            while (calloutEndIndex < lines.length && lines[calloutEndIndex].trimStart().startsWith('>')) {
-                const line = lines[calloutEndIndex].trim();
+            for (let i = existingCalloutIndex + 1; i <= calloutEndIndex; i++) {
+                const line = lines[i].trim();
                 const taskMatch = line.match(/^>\s*-\s*\[([A-Za-z])\]/);
                 if (taskMatch) {
                     const time = this.extractTimeFromTask(line);
-                    existingTasks.push({ line, index: calloutEndIndex, time });
+                    existingTasks.push({ line, index: i, time });
                 }
-                calloutEndIndex++;
             }
 
-            // If we have tasks to move or existing tasks
+            // Update the callout format if needed
+            changed = this.updateCalloutFormat(lines, existingCalloutIndex) || changed;
+
             if (tasksToMove.length > 0 || existingTasks.length > 0) {
                 changed = true;
                 // Combine and sort all tasks
                 const allTasks = this.sortTasks([...existingTasks, ...tasksToMove]);
 
                 // Replace the existing callout content
-                lines.splice(existingCalloutIndex + 1, calloutEndIndex - existingCalloutIndex - 1);
-                lines.splice(existingCalloutIndex + 1, 0, ...allTasks.map(task => task.line));
-
-                // Remove original tasks that were moved (in reverse order)
-                for (let i = tasksToMove.length - 1; i >= 0; i--) {
-                    lines[tasksToMove[i].index] = '';
-                }
+                lines.splice(existingCalloutIndex + 1, calloutEndIndex - existingCalloutIndex, ...allTasks.map(task => task.line));
             }
         } else if (tasksToMove.length > 0) {
             changed = true;
-            // Create new callout with sorted tasks
             const calloutString = this.createCalloutString(this.plugin.settings.sectionFormat);
             const sortedTasks = tasksToMove.map(task => task.line).join('\n');
 
-            // Remove original tasks (in reverse order)
-            for (let i = tasksToMove.length - 1; i >= 0; i--) {
-                lines[tasksToMove[i].index] = '';
-            }
-
             // Add the callout section
+            lines.push('');
             lines.push(calloutString + '\n' + sortedTasks);
         }
 
@@ -246,22 +280,14 @@ export class AddJotsCommand implements Command {
             return null;
         }
 
-        // Clean up the content and handle spacing
-        let cleanedLines = lines.filter(line => line !== '');
-
-        const finalCalloutIndex = cleanedLines.findIndex(line => {
-            const { sectionName } = this.plugin.settings;
-            return new RegExp(`^> \\[!${sectionName.toLowerCase()}\\](?:[+\\-]|\\s|$)`).test(line);
-        });
-
-        if (finalCalloutIndex > 0) {
-            while (finalCalloutIndex > 0 && cleanedLines[finalCalloutIndex - 1].trim() === '') {
-                cleanedLines.splice(finalCalloutIndex - 1, 1);
+        // Clean up any remaining consecutive empty lines
+        for (let i = lines.length - 2; i >= 0; i--) {
+            if (lines[i].trim() === '' && lines[i + 1].trim() === '') {
+                lines.splice(i, 1);
             }
-            cleanedLines.splice(finalCalloutIndex, 0, '');
         }
 
-        return cleanedLines.join('\n');
+        return lines.join('\n');
     }
 
     async processActiveFile() {
