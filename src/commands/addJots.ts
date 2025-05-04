@@ -137,32 +137,6 @@ export class AddJotsCommand implements Command {
         return false;
     }
 
-    findTasksToMove(lines: string[]): TaskWithTime[] {
-        const tasksToMove: TaskWithTime[] = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const taskMatch = line.match(/^(>?\s*)-\s*\[([A-Za-z])\]/);
-
-            if (taskMatch) {
-                const letterFound = taskMatch[2].toUpperCase();
-                const startsWithQuote = line.trimStart().startsWith('>');
-
-                if (this.plugin.settings.taskLetters.includes(letterFound)) {
-                    if (!startsWithQuote || !this.isTaskInCallout(lines, i)) {
-                        // Always ensure tasks start with "> " when moving them
-                        const taskLine = line.trim();
-                        const formattedTask = taskLine.startsWith('>') ? taskLine : `> ${taskLine}`;
-                        const time = this.extractTimeFromTask(formattedTask);
-                        tasksToMove.push({ line: formattedTask, index: i, time });
-                    }
-                }
-            }
-        }
-
-        return this.sortTasks(tasksToMove);
-    }
-
     getCalloutFormatFromLine(line: string): JotsSectionFormat {
         const { sectionName } = this.plugin.settings;
         if (line.match(new RegExp(`^> \\[!${sectionName.toLowerCase()}\\]\\+`))) {
@@ -199,39 +173,88 @@ export class AddJotsCommand implements Command {
     }
 
     async processFileContent(content: string): Promise<string | null> {
-        const lines = content.split('\n');
+        // Split content while preserving YAML frontmatter
+        const yamlRegex = /^---\n([\s\S]*?)\n---/;
+        const yamlMatch = content.match(yamlRegex);
+        const yamlFrontmatter = yamlMatch ? yamlMatch[0] : null;
+        let contentWithoutYaml = yamlMatch ? content.slice(yamlMatch[0].length).trim() : content.trim();
+
+        const lines = contentWithoutYaml.split('\n');
+
+        // Find and preserve the title line and any content before first task
+        const titleLineIndex = lines.findIndex(line => line.trim().startsWith('#'));
+        let contentBeforeTasks: string[] = [];
+
+        if (titleLineIndex !== -1) {
+            // Keep the title and any content until the first task, preserving original spacing
+            let i = 0;
+            while (i < lines.length) {
+                const line = lines[i];
+                if (!line.match(/^(>?\s*)?-\s*\[([A-Za-z])\]/)) {
+                    contentBeforeTasks.push(line);
+                    lines.splice(i, 1);
+                } else {
+                    break;
+                }
+            }
+            // Trim any extra blank lines at the end of contentBeforeTasks
+            while (contentBeforeTasks.length > 0 && contentBeforeTasks[contentBeforeTasks.length - 1].trim() === '') {
+                contentBeforeTasks.pop();
+            }
+        }
+
         const tasksToMove = this.findTasksToMove(lines);
-        const existingCalloutIndex = this.findExistingCalloutIndex(lines);
+        let existingCalloutIndex = this.findExistingCalloutIndex(lines);
         let changed = false;
 
         // First, remove the tasks from their original locations
-        // Sort indices in reverse order to maintain correct positions during removal
-        const taskIndices = tasksToMove.map(task => task.index).sort((a, b) => b - a);
+        // Create a set of normalized task strings for comparison
+        const normalizedTasksToRemove = new Set(
+            tasksToMove.map(task => task.line.replace(/^>\s*/, '').trim().replace(/\s+/g, ' '))
+        );
 
         // Remove tasks and their adjacent empty lines
-        let removedLines = 0;
-        for (const index of taskIndices) {
-            const adjustedIndex = index - removedLines;
+        let i = lines.length - 1;
+        while (i >= 0) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
 
-            // Check and remove previous empty line
-            if (adjustedIndex > 0 && lines[adjustedIndex - 1].trim() === '') {
-                lines.splice(adjustedIndex - 1, 1);
-                removedLines++;
+            if (trimmedLine) {
+                // Normalize the current line for comparison
+                const normalizedLine = trimmedLine.replace(/^>\s*/, '').trim().replace(/\s+/g, ' ');
+
+                if (normalizedTasksToRemove.has(normalizedLine)) {
+                    // Remove the task line
+                    lines.splice(i, 1);
+
+                    // Check and remove adjacent empty lines
+                    if (i > 0 && !lines[i - 1].trim()) {
+                        lines.splice(i - 1, 1);
+                        i--;
+                    }
+                    if (i < lines.length && !lines[i]?.trim()) {
+                        lines.splice(i, 1);
+                    }
+
+                    changed = true;
+                }
             }
+            i--;
+        }
 
-            // Remove the task line itself
-            lines.splice(adjustedIndex - removedLines, 1);
-            removedLines++;
-
-            // Check and remove next empty line
-            if (adjustedIndex - removedLines < lines.length && lines[adjustedIndex - removedLines]?.trim() === '') {
-                lines.splice(adjustedIndex - removedLines, 1);
-                removedLines++;
+        // Clean up any remaining consecutive empty lines
+        i = lines.length - 1;
+        while (i >= 0) {
+            if (lines[i].trim() === '' && (i === lines.length - 1 || (i > 0 && lines[i - 1].trim() === ''))) {
+                lines.splice(i, 1);
             }
+            i--;
         }
 
         // Now handle the callout section
         if (existingCalloutIndex !== -1) {
+            existingCalloutIndex = this.findExistingCalloutIndex(lines); // Recalculate after removals
+
             // Find the end of the callout section
             let calloutEndIndex = existingCalloutIndex;
             for (let i = existingCalloutIndex + 1; i < lines.length; i++) {
@@ -263,6 +286,22 @@ export class AddJotsCommand implements Command {
                 // Combine and sort all tasks
                 const allTasks = this.sortTasks([...existingTasks, ...tasksToMove]);
 
+                // Handle spacing before callout - ensure exactly one blank line
+                if (existingCalloutIndex > 0) {
+                    // Remove any existing blank lines before the callout
+                    while (existingCalloutIndex > 0 && lines[existingCalloutIndex - 1].trim() === '') {
+                        lines.splice(existingCalloutIndex - 1, 1);
+                        existingCalloutIndex--;
+                        calloutEndIndex--;
+                    }
+                    // Add exactly one blank line before the callout if we're not at the start
+                    if (existingCalloutIndex > 0) {
+                        lines.splice(existingCalloutIndex, 0, '');
+                        existingCalloutIndex++;
+                        calloutEndIndex++;
+                    }
+                }
+
                 // Replace the existing callout content
                 lines.splice(existingCalloutIndex + 1, calloutEndIndex - existingCalloutIndex, ...allTasks.map(task => task.line));
             }
@@ -271,23 +310,83 @@ export class AddJotsCommand implements Command {
             const calloutString = this.createCalloutString(this.plugin.settings.sectionFormat);
             const sortedTasks = tasksToMove.map(task => task.line).join('\n');
 
-            // Add the callout section
-            lines.push('');
-            lines.push(calloutString + '\n' + sortedTasks);
+            // Clean up trailing empty lines before adding the callout
+            while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+                lines.pop();
+            }
+
+            // Add exactly one blank line before the callout if there's content
+            if (lines.length > 0) {
+                lines.push('');
+            }
+            lines.push(calloutString);
+            lines.push(...sortedTasks.split('\n'));
         }
 
         if (!changed) {
             return null;
         }
 
-        // Clean up any remaining consecutive empty lines
-        for (let i = lines.length - 2; i >= 0; i--) {
-            if (lines[i].trim() === '' && lines[i + 1].trim() === '') {
-                lines.splice(i, 1);
+        // Reconstruct the file with preserved content
+        let finalContent: string[] = [];
+
+        // Add YAML if it existed
+        if (yamlFrontmatter) {
+            finalContent.push(yamlFrontmatter);
+            finalContent.push('');
+        }
+
+        // Add title and preserved content with proper spacing
+        if (contentBeforeTasks.length > 0) {
+            finalContent.push(...contentBeforeTasks);
+            if (lines.length > 0) {
+                finalContent.push('');  // Single blank line after title before content
             }
         }
 
-        return lines.join('\n');
+        // Add the processed content
+        finalContent.push(...lines);
+
+        // Clean up any trailing empty lines
+        while (finalContent.length > 0 && finalContent[finalContent.length - 1].trim() === '') {
+            finalContent.pop();
+        }
+
+        return finalContent.join('\n');
+    }
+
+    findTasksToMove(lines: string[]): TaskWithTime[] {
+        const tasksToMove: TaskWithTime[] = [];
+        const seenTasks = new Set<string>(); // To prevent duplicates
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Match tasks with or without blockquote prefix, being more lenient with whitespace
+            const taskMatch = line.match(/^(>?\s*)?-\s*\[([A-Za-z])\]/);
+
+            if (taskMatch) {
+                const letterFound = taskMatch[2].toUpperCase();
+
+                if (this.plugin.settings.taskLetters.includes(letterFound)) {
+                    // Skip if task is already in a JOTS callout
+                    if (!this.isTaskInCallout(lines, i)) {
+                        // Clean and normalize the task format
+                        const taskLine = line.trim().replace(/^>\s*/, '').trim(); // Remove any leading '>' and whitespace
+                        const formattedTask = `> ${taskLine}`; // Add the '>' prefix consistently
+
+                        // Only add if we haven't seen this exact task before
+                        const normalizedTask = formattedTask.replace(/\s+/g, ' '); // Normalize whitespace for comparison
+                        if (!seenTasks.has(normalizedTask)) {
+                            const time = this.extractTimeFromTask(formattedTask);
+                            tasksToMove.push({ line: formattedTask, index: i, time });
+                            seenTasks.add(normalizedTask);
+                        }
+                    }
+                }
+            }
+        }
+
+        return this.sortTasks(tasksToMove);
     }
 
     async processActiveFile() {
