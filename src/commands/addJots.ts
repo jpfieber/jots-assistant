@@ -110,13 +110,14 @@ export class AddJotsCommand implements Command {
         // Find the nearest callout header before this task
         for (let i = taskLineIndex - 1; i >= 0; i--) {
             const line = lines[i].trim();
-            if (line.match(/^>\s*\[!.*\]/)) {
+            // Specifically check for JOTS callout
+            if (line.match(new RegExp(`^> \\[!${this.plugin.settings.sectionName.toLowerCase()}\\](?:[+\\-]|\\s|$)`))) {
                 nearestCalloutStart = i;
                 break;
             }
         }
 
-        // If we found a callout header before this task
+        // If we found a JOTS callout header before this task
         if (nearestCalloutStart !== -1) {
             // Find where this callout ends (first non-quoted line after the header)
             for (let i = nearestCalloutStart + 1; i < lines.length; i++) {
