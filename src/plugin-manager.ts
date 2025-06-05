@@ -1,5 +1,4 @@
-import { Notice, Plugin, PluginManifest, requestUrl } from 'obsidian';
-import { AddNewPluginModal } from './ui/AddNewPluginModal';
+import { Notice, PluginManifest, requestUrl } from 'obsidian';
 import JotsPlugin from './main';
 
 interface Release {
@@ -35,32 +34,20 @@ export class PluginManager {
         return scrubbedAddress.trim();
     }
 
-    showAddPluginModal(existingRepo = ''): void {
-        new AddNewPluginModal(
-            this.plugin.app,
-            this.plugin,
-            this,
-            existingRepo
-        ).open();
-    }
-
     async addPlugin(
-        repositoryPath: string,
-        version = '',
-        enableAfterInstall = true,
-        privateApiKey?: string
+        repositoryPath: string
     ): Promise<boolean> {
         try {
             const scrubbedPath = this.scrubRepositoryUrl(repositoryPath);
 
             // Validate repository and get manifest
-            const manifest = await this.validateRepository(scrubbedPath, version, privateApiKey);
+            const manifest = await this.validateRepository(scrubbedPath);
             if (!manifest) {
                 return false;
             }
 
             // Get release files
-            const releaseFiles = await this.getReleaseFiles(scrubbedPath, manifest, version, privateApiKey);
+            const releaseFiles = await this.getReleaseFiles(scrubbedPath, manifest);
             if (!releaseFiles) {
                 return false;
             }
@@ -68,68 +55,21 @@ export class PluginManager {
             // Write files to plugin folder
             await this.writePluginFiles(manifest.id, releaseFiles);
 
-            // Update settings
-            if (!this.plugin.settings.pluginList.includes(scrubbedPath)) {
-                this.plugin.settings.pluginList.push(scrubbedPath);
-            }
+            // Enable the plugin by default
+            await this.enablePlugin(manifest.id);
 
-            const versionInfo = {
-                repo: scrubbedPath,
-                version: version || 'latest',
-                token: privateApiKey
-            };
-
-            const existingIndex = this.plugin.settings.pluginVersions.findIndex(
-                p => p.repo === scrubbedPath
-            );
-
-            if (existingIndex >= 0) {
-                this.plugin.settings.pluginVersions[existingIndex] = versionInfo;
-            } else {
-                this.plugin.settings.pluginVersions.push(versionInfo);
-            }
-
-            await this.plugin.saveSettings();
-
-            // Enable plugin if requested
-            if (enableAfterInstall) {
-                await this.enablePlugin(manifest.id);
-            }
-
-            new Notice(`Plugin ${manifest.name} has been ${version ? 'updated' : 'installed'}`);
+            new Notice(`Plugin ${manifest.name} has been installed`);
             return true;
 
         } catch (error) {
-            console.error('Error adding plugin:', error);
-            new Notice(`Failed to ${version ? 'update' : 'install'} plugin: ${error.message}`);
+            console.error('Error installing plugin:', error);
+            new Notice(`Failed to install plugin: ${error.message}`);
             return false;
         }
-    }
-
-    async updatePlugin(repositoryPath: string): Promise<boolean> {
-        const pluginVersion = this.plugin.settings.pluginVersions.find(
-            p => p.repo === repositoryPath
-        );
-
-        // Don't update if version is frozen
-        if (pluginVersion && pluginVersion.version !== 'latest') {
-            new Notice(`Plugin ${repositoryPath} is on frozen version ${pluginVersion.version}`);
-            return false;
-        }
-
-        // Call addPlugin with empty version to get latest, but don't enable after update
-        return await this.addPlugin(
-            repositoryPath,
-            '',  // empty version to get latest
-            false,  // don't enable after update since it's already enabled
-            pluginVersion?.token  // preserve any private token
-        );
     }
 
     private async validateRepository(
-        repositoryPath: string,
-        version = '',
-        privateApiKey?: string
+        repositoryPath: string
     ): Promise<PluginManifest | null> {
         try {
             const headers: Record<string, string> = {
@@ -137,12 +77,8 @@ export class PluginManager {
                 'User-Agent': 'jots-assistant'
             };
 
-            if (privateApiKey || this.plugin.settings.personalAccessToken) {
-                headers['Authorization'] = `Token ${privateApiKey || this.plugin.settings.personalAccessToken}`;
-            }
-
-            // Get the latest release or specific version
-            const release = await this.getRelease(repositoryPath, version, headers);
+            // Get the latest release
+            const release = await this.getRelease(repositoryPath, headers);
             if (!release) {
                 new Notice('No release found for the repository');
                 return null;
@@ -170,14 +106,6 @@ export class PluginManager {
                 return null;
             }
 
-            // Optional: Replace manifest version with release tag version if they differ
-            const releaseVersion = this.coerceSemver(release.tag_name);
-            const manifestVersion = this.coerceSemver(manifest.version);
-            if (releaseVersion && manifestVersion && releaseVersion !== manifestVersion) {
-                console.log(`Version mismatch - Release: ${releaseVersion}, Manifest: ${manifestVersion}`);
-                manifest.version = releaseVersion;
-            }
-
             return manifest;
 
         } catch (error) {
@@ -187,18 +115,17 @@ export class PluginManager {
             if (error.status === 404) {
                 new Notice('Repository or release not found. Check that the repository exists and has releases.');
             } else if (error.status === 403) {
-                new Notice('GitHub API rate limit exceeded. Consider adding a personal access token in settings.');
-            } else if (error.status === 401) {
-                new Notice('Invalid GitHub personal access token.');
+                new Notice('GitHub API rate limit exceeded.');
             } else {
                 new Notice(`Failed to validate repository: ${error.message}`);
             }
 
             return null;
         }
-    } private async getRelease(
+    }
+
+    private async getRelease(
         repositoryPath: string,
-        version: string,
         headers: Record<string, string>
     ): Promise<Release | null> {
         try {
@@ -223,9 +150,7 @@ export class PluginManager {
             }
 
             // Get releases
-            const apiUrl = version && version !== 'latest' ?
-                `https://api.github.com/repos/${repositoryPath}/releases/tags/${version}` :
-                `https://api.github.com/repos/${repositoryPath}/releases?per_page=100`;
+            const apiUrl = `https://api.github.com/repos/${repositoryPath}/releases?per_page=100`;
 
             const response = await requestUrl({
                 url: apiUrl,
@@ -238,21 +163,12 @@ export class PluginManager {
 
             let releases: any[];
             try {
-                if (version && version !== 'latest') {
-                    const data = JSON.parse(response.text);
-                    if (!data.assets || !data.tag_name) {
-                        console.log('Invalid release format');
-                        return null;
-                    }
-                    releases = [data];
-                } else {
-                    const data = JSON.parse(response.text);
-                    if (!Array.isArray(data)) {
-                        console.log('Expected array of releases');
-                        return null;
-                    }
-                    releases = data;
+                const data = JSON.parse(response.text);
+                if (!Array.isArray(data)) {
+                    console.log('Expected array of releases');
+                    return null;
                 }
+                releases = data;
             } catch (e) {
                 console.log('Failed to parse releases:', e);
                 return null;
@@ -298,7 +214,9 @@ export class PluginManager {
             }
             throw error;
         }
-    } private coerceSemver(version: string): string | null {
+    }
+
+    private coerceSemver(version: string): string | null {
         // Remove 'v' prefix if present
         const cleaned = version.replace(/^v/i, '');
 
@@ -324,7 +242,9 @@ export class PluginManager {
         }
 
         return null;
-    } private async fetchReleaseFile(release: Release, fileName: string, headers: Record<string, string>): Promise<string | null> {
+    }
+
+    private async fetchReleaseFile(release: Release, fileName: string, headers: Record<string, string>): Promise<string | null> {
         try {
             const asset = release.assets.find(a => a.name === fileName);
             if (!asset) {
@@ -359,20 +279,14 @@ export class PluginManager {
 
     private async getReleaseFiles(
         repositoryPath: string,
-        manifest: PluginManifest,
-        version: string,
-        privateApiKey?: string
+        manifest: PluginManifest
     ): Promise<ReleaseFiles | null> {
         try {
             const headers: Record<string, string> = {
                 'Accept': 'application/vnd.github.v3+json'
             };
 
-            if (privateApiKey || this.plugin.settings.personalAccessToken) {
-                headers['Authorization'] = `Token ${privateApiKey || this.plugin.settings.personalAccessToken}`;
-            }
-
-            const release = await this.getRelease(repositoryPath, version, headers);
+            const release = await this.getRelease(repositoryPath, headers);
             if (!release) {
                 return null;
             }
