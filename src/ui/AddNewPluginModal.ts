@@ -77,7 +77,7 @@ export class AddNewPluginModal extends Modal {
                 }
             });
         });
-    }    async submitForm(): Promise<void> {
+    } async submitForm(): Promise<void> {
         if (!this.address) return;
 
         try {
@@ -99,14 +99,14 @@ export class AddNewPluginModal extends Modal {
             this.addPluginButton?.setDisabled(false);
             this.cancelButton?.setDisabled(false);
         }
-    }    private validateGitHubRepo(repo: string): boolean {
+    } private validateGitHubRepo(repo: string): boolean {
         // Match either format:
         // 1. user/repo
         // 2. https://github.com/user/repo
         const githubPattern = /^(?:https?:\/\/github\.com\/)?([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)(?:\.git)?$/i;
         const url = repo.trim();
         const match = githubPattern.exec(url);
-        
+
         if (match) {
             // Store just the owner/repo part
             this.address = `${match[1]}/${match[2]}`;

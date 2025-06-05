@@ -4,8 +4,8 @@ import JotsPlugin from './main';
 
 interface Release {
     tag_name: string;
-    assets: Array<{ 
-        name: string; 
+    assets: Array<{
+        name: string;
         browser_download_url: string;
         url: string;
     }>;
@@ -37,9 +37,9 @@ export class PluginManager {
 
     showAddPluginModal(existingRepo = ''): void {
         new AddNewPluginModal(
-            this.plugin.app, 
-            this.plugin, 
-            this, 
+            this.plugin.app,
+            this.plugin,
+            this,
             existingRepo
         ).open();
     }
@@ -52,7 +52,7 @@ export class PluginManager {
     ): Promise<boolean> {
         try {
             const scrubbedPath = this.scrubRepositoryUrl(repositoryPath);
-            
+
             // Validate repository and get manifest
             const manifest = await this.validateRepository(scrubbedPath, version, privateApiKey);
             if (!manifest) {
@@ -182,7 +182,7 @@ export class PluginManager {
 
         } catch (error) {
             console.error('Error validating repository:', error);
-            
+
             // Handle specific error cases
             if (error.status === 404) {
                 new Notice('Repository or release not found. Check that the repository exists and has releases.');
@@ -193,10 +193,10 @@ export class PluginManager {
             } else {
                 new Notice(`Failed to validate repository: ${error.message}`);
             }
-            
+
             return null;
         }
-    }    private async getRelease(
+    } private async getRelease(
         repositoryPath: string,
         version: string,
         headers: Record<string, string>
@@ -259,11 +259,11 @@ export class PluginManager {
             }
 
             // Filter for valid releases with assets
-            const validReleases = releases.filter(r => 
-                r.assets && 
-                Array.isArray(r.assets) && 
-                r.assets.length > 0 && 
-                r.tag_name && 
+            const validReleases = releases.filter(r =>
+                r.assets &&
+                Array.isArray(r.assets) &&
+                r.assets.length > 0 &&
+                r.tag_name &&
                 !r.draft
             );
 
@@ -298,10 +298,10 @@ export class PluginManager {
             }
             throw error;
         }
-    }    private coerceSemver(version: string): string | null {
+    } private coerceSemver(version: string): string | null {
         // Remove 'v' prefix if present
         const cleaned = version.replace(/^v/i, '');
-        
+
         // First try strict semver
         const semverRegex = /^(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;
         const match = cleaned.match(semverRegex);
@@ -324,7 +324,7 @@ export class PluginManager {
         }
 
         return null;
-    }    private async fetchReleaseFile(release: Release, fileName: string, headers: Record<string, string>): Promise<string | null> {
+    } private async fetchReleaseFile(release: Release, fileName: string, headers: Record<string, string>): Promise<string | null> {
         try {
             const asset = release.assets.find(a => a.name === fileName);
             if (!asset) {

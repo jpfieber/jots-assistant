@@ -201,7 +201,7 @@ export class JotsSettingTab extends PluginSettingTab {
         });
 
         containerEl.createEl('h3', { text: 'Optional Plugin Dependencies' });
-        
+
         // Create GitHub PAT setting
         new Setting(containerEl)
             .setName('GitHub Personal Access Token')
@@ -223,7 +223,7 @@ export class JotsSettingTab extends PluginSettingTab {
             .addButton(button => {
                 button
                     .setButtonText('Add Plugin')
-                    .setCta()                    .onClick(async () => {
+                    .setCta().onClick(async () => {
                         this.plugin.pluginManager.showAddPluginModal();
                     });
             });
@@ -233,13 +233,13 @@ export class JotsSettingTab extends PluginSettingTab {
             const pluginVersion = this.plugin.settings.pluginVersions.find(pv => pv.repo === repoPath);
             const settingContainer = new Setting(containerEl)
                 .setName(repoPath)
-                .setDesc(pluginVersion?.version ? 
-                    `Version: ${pluginVersion.version} ${pluginVersion.version === "latest" ? "" : "(frozen)"}` : 
+                .setDesc(pluginVersion?.version ?
+                    `Version: ${pluginVersion.version} ${pluginVersion.version === "latest" ? "" : "(frozen)"}` :
                     "");
 
             // Add update button for non-frozen versions
             if (!pluginVersion?.version || pluginVersion.version === "latest") {
-                settingContainer.addButton(btn => 
+                settingContainer.addButton(btn =>
                     btn.setIcon("sync")
                         .setTooltip("Check and update plugin")
                         .onClick(async () => {
@@ -251,7 +251,7 @@ export class JotsSettingTab extends PluginSettingTab {
             // Add edit version button
             settingContainer.addButton(btn =>
                 btn.setIcon("edit")
-                    .setTooltip("Change version")                    .onClick(() => {
+                    .setTooltip("Change version").onClick(() => {
                         this.plugin.pluginManager.showAddPluginModal(repoPath);
                     })
             );
