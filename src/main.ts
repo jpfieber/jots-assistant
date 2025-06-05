@@ -2,13 +2,18 @@ import { Plugin } from 'obsidian';
 import { JotsSettings, DEFAULT_SETTINGS, JotsSettingTab } from './settings';
 import { registerCommands } from './commands';
 import { generateJotsIconCss } from './utils';
+import { PluginManager } from './plugin-manager';
 
 export default class JotsPlugin extends Plugin {
 	settings: JotsSettings;
 	private styleEl: HTMLStyleElement;
+	public pluginManager: PluginManager;
 
 	async onload() {
 		await this.loadSettings();
+
+		// Initialize plugin manager
+		this.pluginManager = new PluginManager(this);
 
 		// Create and inject the style element for dynamic styles
 		this.styleEl = document.createElement('style');

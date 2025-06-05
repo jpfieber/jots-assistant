@@ -3,6 +3,12 @@ import JotsPlugin from './main';
 
 export type JotsSectionFormat = 'Plain' | 'Foldable-Open' | 'Foldable-Closed';
 
+export interface JotsPluginVersion {
+    repo: string;
+    version: "latest" | string;
+    token?: string;
+}
+
 export interface JotsSettings {
     sectionName: string;
     sectionIcon: string;
@@ -12,6 +18,10 @@ export interface JotsSettings {
     journalRootFolder: string;
     journalFolderPattern: string;
     journalFilePattern: string;
+    pluginList: string[]; // List of plugin repository paths
+    pluginVersions: JotsPluginVersion[]; // List of plugins with version info
+    enableAfterInstall: boolean; // Whether to enable plugins after installation
+    personalAccessToken?: string; // GitHub personal access token
 }
 
 interface DependencyState {
@@ -33,7 +43,11 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     taskLetters: ['A', 'B', 'C'],
     journalRootFolder: 'Journals',
     journalFolderPattern: 'YYYY/YYYY-MM',
-    journalFilePattern: 'YYYY-MM-DD_ddd'
+    journalFilePattern: 'YYYY-MM-DD_ddd',
+    pluginList: [],
+    pluginVersions: [],
+    enableAfterInstall: true,
+    personalAccessToken: ''
 }
 
 interface SettingsTab {
@@ -167,7 +181,7 @@ export class JotsSettingTab extends PluginSettingTab {
 
         containerEl.createEl('h3', { text: 'Dependencies' });
 
-        // Create the setting with just the power button
+        // Create the setting with just the power button for required dependencies
         const settingItem = new Setting(containerEl)
             .setName('Dataview Plugin')
             .setDesc('Required for advanced JOTS features');
@@ -185,6 +199,79 @@ export class JotsSettingTab extends PluginSettingTab {
 
             button.onClick(() => this.openPluginBrowser('dataview'));
         });
+
+        containerEl.createEl('h3', { text: 'Optional Plugin Dependencies' });
+        
+        // Create GitHub PAT setting
+        new Setting(containerEl)
+            .setName('GitHub Personal Access Token')
+            .setDesc('Set a personal access token to increase rate limits for public repositories and access private repositories on GitHub. You can create one in your GitHub account settings.')
+            .addText(text => {
+                text.setPlaceholder('Enter your personal access token')
+                    .setValue(this.plugin.settings.personalAccessToken || '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.personalAccessToken = value || '';
+                        await this.plugin.saveSettings();
+                    });
+                text.inputEl.style.width = '100%';
+            });
+
+        // Add Plugin button
+        new Setting(containerEl)
+            .setName('Plugin Dependencies')
+            .setDesc('Add optional plugins that JOTS can use for enhanced functionality')
+            .addButton(button => {
+                button
+                    .setButtonText('Add Plugin')
+                    .setCta()                    .onClick(async () => {
+                        this.plugin.pluginManager.showAddPluginModal();
+                    });
+            });
+
+        // List installed plugins
+        for (const repoPath of this.plugin.settings.pluginList) {
+            const pluginVersion = this.plugin.settings.pluginVersions.find(pv => pv.repo === repoPath);
+            const settingContainer = new Setting(containerEl)
+                .setName(repoPath)
+                .setDesc(pluginVersion?.version ? 
+                    `Version: ${pluginVersion.version} ${pluginVersion.version === "latest" ? "" : "(frozen)"}` : 
+                    "");
+
+            // Add update button for non-frozen versions
+            if (!pluginVersion?.version || pluginVersion.version === "latest") {
+                settingContainer.addButton(btn => 
+                    btn.setIcon("sync")
+                        .setTooltip("Check and update plugin")
+                        .onClick(async () => {
+                            await this.plugin.pluginManager.updatePlugin(repoPath);
+                        })
+                );
+            }
+
+            // Add edit version button
+            settingContainer.addButton(btn =>
+                btn.setIcon("edit")
+                    .setTooltip("Change version")                    .onClick(() => {
+                        this.plugin.pluginManager.showAddPluginModal(repoPath);
+                    })
+            );
+
+            // Add remove button
+            settingContainer.addButton(btn => {
+                let clicked = false;
+                btn.setIcon("cross")
+                    .setTooltip("Remove plugin")
+                    .onClick(() => {
+                        if (!clicked) {
+                            clicked = true;
+                            btn.setButtonText("Click again to remove");
+                        } else {
+                            this.removePlugin(repoPath);
+                            settingContainer.settingEl.remove();
+                        }
+                    });
+            });
+        }
     }
 
     createAppearanceSettings(containerEl: HTMLElement): void {
@@ -305,5 +392,20 @@ export class JotsSettingTab extends PluginSettingTab {
                     this.plugin.settings.journalFilePattern = value;
                     await this.plugin.saveSettings();
                 }));
+    }
+
+    private createGitHubLink(repoPath: string): HTMLElement {
+        const linkEl = createSpan();
+        linkEl.createEl("a", {
+            href: `https://github.com/${repoPath}`,
+            text: repoPath
+        }).setAttr("target", "_blank");
+        return linkEl;
+    }
+
+    private removePlugin(repoPath: string): void {
+        this.plugin.settings.pluginList = this.plugin.settings.pluginList.filter(p => p !== repoPath);
+        this.plugin.settings.pluginVersions = this.plugin.settings.pluginVersions.filter(p => p.repo !== repoPath);
+        this.plugin.saveSettings();
     }
 }
