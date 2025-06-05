@@ -12,6 +12,7 @@ export interface JotsSettings {
     journalRootFolder: string;
     journalFolderPattern: string;
     journalFilePattern: string;
+    personalAccessToken?: string; // GitHub personal access token for rate limits
 }
 
 interface DependencyState {
@@ -33,7 +34,8 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     taskLetters: ['A', 'B', 'C'],
     journalRootFolder: 'Journals',
     journalFolderPattern: 'YYYY/YYYY-MM',
-    journalFilePattern: 'YYYY-MM-DD_ddd'
+    journalFilePattern: 'YYYY-MM-DD_ddd',
+    personalAccessToken: ''
 }
 
 interface SettingsTab {
@@ -54,23 +56,32 @@ export class JotsSettingTab extends PluginSettingTab {
     }
 
     private async checkDependencies() {
-        // Helper function to check plugin state
-        const checkPlugin = (id: string) => {
-            //@ts-ignore - Access internal Obsidian API
-            const plugin = this.app.plugins?.plugins[id];  // Change from getPlugin() to accessing plugins directly
-            const isInstalled = plugin !== undefined;
-            //@ts-ignore - Access internal Obsidian API
-            const isEnabled = isInstalled && this.app.plugins?.enabledPlugins.has(id);
+        // Check if Dataview is installed and enabled
+        //@ts-ignore - Access internal Obsidian API
+        const dataviewPlugin = (this.app as any).plugins?.getPlugin('dataview');
+        const isInstalled = dataviewPlugin !== undefined;
+        //@ts-ignore - Access internal Obsidian API
+        const isEnabled = isInstalled && (this.app as any).plugins?.enabledPlugins.has('dataview');
 
-            this.dependencyState[id] = {
-                isInstalled,
-                isEnabled
-            };
+        this.dependencyState['dataview'] = {
+            isInstalled,
+            isEnabled
         };
+    }
 
-        // Check both required plugins
-        checkPlugin('dataview');
-        checkPlugin('virtual-footer'); // Changed from obsidian-virtual-footer to virtual-footer
+    private async openPluginBrowser(pluginId: string) {
+        // Open community plugins browser
+        //@ts-ignore - Access internal Obsidian API
+        await (this.app as any).setting?.openTabById('community-plugins');
+        //@ts-ignore - Access internal Obsidian API
+        const communityPluginsTab = (this.app as any).setting?.activeTab;
+        if (communityPluginsTab) {
+            const searchEl = (communityPluginsTab.containerEl.querySelector('.search-input-container input') as HTMLInputElement);
+            if (searchEl) {
+                searchEl.value = pluginId;
+                searchEl.dispatchEvent(new Event('input'));
+            }
+        }
     }
 
     createTab(id: string, name: string): HTMLElement {
@@ -158,71 +169,61 @@ export class JotsSettingTab extends PluginSettingTab {
 
         containerEl.createEl('h3', { text: 'Plugin Dependencies' });
 
+        // GitHub PAT setting at the top since it affects plugin operations
+        new Setting(containerEl)
+            .setName('GitHub Personal Access Token')
+            .setDesc('Set a personal access token to increase rate limits for GitHub operations. You can create one in your GitHub account settings.')
+            .addText(text => {
+                text.setPlaceholder('Enter your personal access token')
+                    .setValue(this.plugin.settings.personalAccessToken || '')
+                    .onChange(async (value) => {
+                        this.plugin.settings.personalAccessToken = value || '';
+                        await this.plugin.saveSettings();
+                    });
+                text.inputEl.style.width = '100%';
+            });
+
         // Add description for required plugins
         containerEl.createEl('p', {
             text: 'These plugins are required for JOTS to function properly.'
         }).addClass('setting-item-description');
 
-        // Helper function to create dependency controls
-        const createDependencyControls = (
-            name: string,
-            desc: string,
-            id: string,
-            repo: string
-        ) => {
-            const setting = new Setting(containerEl)
-                .setName(name)
-                .setDesc(desc);
+        // Dataview Plugin Controls
+        const dataviewSetting = new Setting(containerEl)
+            .setName('Dataview')
+            .setDesc('Required for advanced JOTS features');
 
-            const isInstalled = this.dependencyState[id]?.isInstalled;
-            const isEnabled = this.dependencyState[id]?.isEnabled;
+        const isInstalled = this.dependencyState['dataview']?.isInstalled;
+        const isEnabled = this.dependencyState['dataview']?.isEnabled;
 
-            if (!isInstalled) {
-                // Install button when not installed
-                setting.addButton(btn =>
-                    btn.setButtonText('Install')
-                        .setCta()
-                        .onClick(async () => {
-                            await this.plugin.pluginManager.addPlugin(repo);
-                        })
-                );
-            } else {
-                // Enable/Disable toggle when installed
-                setting.addToggle(toggle =>
-                    toggle.setValue(isEnabled)
-                        .setTooltip(isEnabled ? `Disable ${name}` : `Enable ${name}`)
-                        .onChange(async (value) => {
-                            //@ts-ignore - Access internal Obsidian API
-                            if (value) await this.app.plugins.enablePluginAndSave(id);
-                            //@ts-ignore - Access internal Obsidian API
-                            else await this.app.plugins.disablePluginAndSave(id);
-                            await this.checkDependencies();
-                        })
-                );
+        if (!isInstalled) {
+            // Install button when not installed
+            dataviewSetting.addButton(btn => 
+                btn.setButtonText('Install')
+                   .setCta()
+                   .onClick(() => this.openPluginBrowser('dataview'))
+            );
+        } else {
+            // Enable/Disable toggle when installed
+            dataviewSetting.addToggle(toggle => 
+                toggle.setValue(isEnabled)
+                      .setTooltip(isEnabled ? 'Disable Dataview' : 'Enable Dataview')
+                      .onChange(async (value) => {
+                          //@ts-ignore - Access internal Obsidian API
+                          if (value) await this.app.plugins.enablePluginAndSave('dataview');
+                          //@ts-ignore - Access internal Obsidian API
+                          else await this.app.plugins.disablePluginAndSave('dataview');
+                          await this.checkDependencies();
+                      })
+            );
 
-                // Status indicator
-                setting.addExtraButton(btn =>
-                    btn.setIcon(isEnabled ? 'checkmark' : 'cross')
-                        .setTooltip(isEnabled ? `${name} is active` : `${name} is disabled`)
-                        .extraSettingsEl.addClass(isEnabled ? 'is-active' : 'is-inactive')
-                );
-            }
-        };
-
-        // Create controls for each required dependency
-        createDependencyControls(
-            'Dataview',
-            'Required for advanced JOTS features',
-            'dataview',
-            'blacksmithgu/obsidian-dataview'
-        );
-
-        createDependencyControls(
-            'Virtual Footer',
-            'Required for JOTS footer integration',
-            'virtual-footer',
-            'Signynt/virtual-footer'
-        );
+            // Status indicator
+            dataviewSetting.addExtraButton(btn => 
+                btn.setIcon(isEnabled ? 'checkmark' : 'cross')
+                   .setTooltip(isEnabled ? 'Dataview is active' : 'Dataview is disabled')
+                   .extraSettingsEl.addClass(isEnabled ? 'is-active' : 'is-inactive')
+            );
+        }
     }
 
     createAppearanceSettings(containerEl: HTMLElement): void {
