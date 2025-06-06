@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, App, ButtonComponent, PluginSettingTab, Setting, MarkdownView, getAllTags } from 'obsidian';
+import { AbstractInputSuggest, App, PluginSettingTab, Setting, MarkdownView, ButtonComponent, getAllTags } from 'obsidian';
 import JotsPlugin from './main';
 
 export type JotsSectionFormat = 'Plain' | 'Foldable-Open' | 'Foldable-Closed';
@@ -14,6 +14,30 @@ interface ExtendedApp extends App {
     plugins: InternalPlugins;
 }
 
+interface DependencyState {
+    isInstalled: boolean;
+    isEnabled: boolean;
+}
+
+interface JotsPluginInfo {
+    repo: string;
+    name: string;
+    description: string;
+}
+
+const JOTS_PLUGINS: JotsPluginInfo[] = [
+    {
+        repo: 'jpfieber/jots-inbox-processor',
+        name: 'Inbox Processor',
+        description: 'JOTS plugin to process inbox items'
+    },
+    {
+        repo: 'jpfieber/jots-yesterdays-weather',
+        name: "Yesterday's Weather",
+        description: 'JOTS plugin to display weather information'
+    }
+];
+
 export interface JotsSettings {
     sectionName: string;
     sectionIcon: string;
@@ -27,11 +51,6 @@ export interface JotsSettings {
     updateAtStartup: boolean; // Whether to auto-update plugins at startup
     rules: Rule[]; // Virtual Footer rules
     refreshOnFileOpen?: boolean; // Whether to refresh headers/footers on file open
-}
-
-interface DependencyState {
-    isInstalled: boolean;
-    isEnabled: boolean;
 }
 
 interface SettingsTab {
@@ -49,9 +68,7 @@ export class JotsSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: JotsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
-    }
-
-    async checkDependencies() {
+    } async checkDependencies() {
         // Helper function to check plugin state
         const checkPlugin = async (id: string) => {
             const app = this.app as unknown as ExtendedApp;
@@ -73,6 +90,12 @@ export class JotsSettingTab extends PluginSettingTab {
         // Check both required plugins
         await checkPlugin('dataview');
         await checkPlugin('virtual-footer');
+
+        // Check JOTS plugins
+        for (const plugin of JOTS_PLUGINS) {
+            const id = plugin.repo.split('/')[1]; // Get plugin ID from repo
+            await checkPlugin(id);
+        }
     }
 
     createTab(id: string, name: string): HTMLElement {
@@ -278,14 +301,104 @@ export class JotsSettingTab extends PluginSettingTab {
             'Required for advanced JOTS features',
             'dataview',
             'blacksmithgu/obsidian-dataview'
-        );
-
-        await createDependencyControls(
+        ); await createDependencyControls(
             'Virtual Footer',
             'Required for JOTS footer integration',
             'virtual-footer',
             'Signynt/virtual-footer'
         );
+
+        // JOTS Plugins section
+        containerEl.createEl('hr');
+        containerEl.createEl('h3', { text: 'JOTS Plugins' });
+        containerEl.createEl('p', {
+            text: 'Additional plugins that extend JOTS functionality.'
+        }).addClass('setting-item-description');
+
+        for (const plugin of JOTS_PLUGINS) {
+            const id = plugin.repo.split('/')[1]; // Get plugin ID from repo
+            const setting = new Setting(containerEl)
+                .setName(plugin.name)
+                .setDesc(plugin.description);
+
+            const isInstalled = this.dependencyState[id]?.isInstalled;
+            const isLoaded = (this.app as unknown as ExtendedApp).plugins?.plugins[id] !== undefined;
+            const isEnabled = isInstalled && isLoaded;
+
+            // Create the main action button (Install/Uninstall)
+            setting.addButton(btn => {
+                if (!isInstalled) {
+                    btn.setButtonText('Install')
+                        .setCta()
+                        .onClick(async () => {
+                            btn.setButtonText('Installing...');
+                            btn.setDisabled(true);
+                            const success = await this.plugin.pluginManager.addPlugin(plugin.repo);
+                            await this.checkDependencies();
+                            const state = this.dependencyState[id];
+
+                            if (success && state?.isInstalled) {
+                                btn.setButtonText('Uninstall')
+                                    .removeCta()
+                                    .setDisabled(state.isEnabled);
+
+                                // Add toggle since plugin is now installed
+                                setting.addToggle(toggle => {
+                                    toggle.setValue(state.isEnabled)
+                                        .setTooltip(state.isEnabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`)
+                                        .onChange(async (value) => {
+                                            //@ts-ignore - Access internal Obsidian API
+                                            if (value) await this.app.plugins.enablePluginAndSave(id);
+                                            //@ts-ignore - Access internal Obsidian API
+                                            else await this.app.plugins.disablePluginAndSave(id);
+                                            await this.checkDependencies();
+                                            const newState = this.dependencyState[id];
+                                            btn.setDisabled(newState?.isEnabled ?? false);
+                                        });
+                                });
+                            } else {
+                                btn.setButtonText('Install')
+                                    .setCta()
+                                    .setDisabled(false);
+                            }
+                        });
+                } else {
+                    btn.setButtonText('Uninstall')
+                        .setDisabled(isEnabled)
+                        .onClick(async () => {
+                            btn.setButtonText('Uninstalling...');
+                            btn.setDisabled(true);
+                            await this.plugin.pluginManager.uninstallPlugin(id);
+                            await this.checkDependencies();
+                            const state = this.dependencyState[id];
+
+                            if (!state?.isInstalled) {
+                                btn.setButtonText('Install')
+                                    .setCta()
+                                    .setDisabled(false);
+
+                                // Remove the toggle since plugin is now uninstalled
+                                setting.components = setting.components.filter(c => c instanceof ButtonComponent);
+                            }
+                        });
+
+                    // Add toggle for installed plugins
+                    setting.addToggle(toggle => {
+                        toggle.setValue(isEnabled)
+                            .setTooltip(isEnabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`)
+                            .onChange(async (value) => {
+                                //@ts-ignore - Access internal Obsidian API
+                                if (value) await this.app.plugins.enablePluginAndSave(id);
+                                //@ts-ignore - Access internal Obsidian API
+                                else await this.app.plugins.disablePluginAndSave(id);
+                                await this.checkDependencies();
+                                const newState = this.dependencyState[id];
+                                btn.setDisabled(newState?.isEnabled ?? false);
+                            });
+                    });
+                }
+            });
+        }
     }
 
     createAppearanceSettings(containerEl: HTMLElement): void {
