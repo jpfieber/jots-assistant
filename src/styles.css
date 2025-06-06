@@ -95,6 +95,41 @@
     color: var(--text-muted);
 }
 
+.jots-latest-version,
+.jots-installed-version {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.jots-latest-version {
+    margin-left: 8px;
+}
+
+.jots-version-newer {
+    color: var(--color-green);
+}
+
+.jots-version-outdated {
+    color: var(--color-orange);
+}
+
+.jots-repo-info {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.9em;
+}
+
+.jots-repo-link {
+    color: var(--text-accent);
+    text-decoration: none;
+}
+
+.jots-repo-link:hover {
+    text-decoration: underline;
+}
+
 .jots-settings-description {
     font-size: 1em;
     line-height: 1;

@@ -35,6 +35,11 @@ const JOTS_PLUGINS: JotsPluginInfo[] = [
         repo: 'jpfieber/jots-yesterdays-weather',
         name: "Yesterday's Weather",
         description: 'JOTS plugin to display weather information'
+    },
+    {
+        repo: 'jpfieber/jots-sleep-tracker',
+        name: "Sleep Tracker",
+        description: 'JOTS plugin to track sleep patterns'
     }
 ];
 
@@ -87,9 +92,8 @@ export class JotsSettingTab extends PluginSettingTab {
             };
         };
 
-        // Check both required plugins
+        // Check Dataview plugin
         await checkPlugin('dataview');
-        await checkPlugin('virtual-footer');
 
         // Check JOTS plugins
         for (const plugin of JOTS_PLUGINS) {
@@ -211,13 +215,41 @@ export class JotsSettingTab extends PluginSettingTab {
             id: string,
             repo: string
         ) => {
-            const setting = new Setting(containerEl)
-                .setName(name)
-                .setDesc(desc);
+            const setting = new Setting(containerEl);
+
+            // Create name as a GitHub link
+            setting.setName(createFragment(el => {
+                const link = el.createEl('a', {
+                    text: name,
+                    href: `https://github.com/${repo}`
+                });
+                link.setAttr('target', '_blank');
+            }));
+
+            // Description with version info
+            setting.setDesc(createFragment(el => {
+                // Add main description
+                el.createDiv({ text: desc });
+
+                // Add version info
+                const versionInfo = el.createDiv();
+                versionInfo.style.marginTop = '8px';
+
+                // Version info will be populated asynchronously
+                Promise.all([
+                    this.plugin.pluginManager.getInstalledVersion(id),
+                    this.plugin.pluginManager.getLatestVersion(repo)
+                ]).then(([installedVer, latestVer]) => {
+                    const versionText = `Version Information: Installed = v${installedVer || 'N/A'} Latest = v${latestVer || 'N/A'}`;
+                    versionInfo.createSpan({
+                        text: versionText,
+                        cls: latestVer && installedVer && latestVer !== installedVer ? 'jots-latest-version' : ''
+                    });
+                });
+            }));
 
             const isInstalled = this.dependencyState[id]?.isInstalled;
-            //@ts-ignore - Access internal Obsidian API
-            const isLoaded = this.app.plugins?.plugins[id] !== undefined;
+            const isLoaded = (this.app as unknown as ExtendedApp).plugins?.plugins[id] !== undefined;
             const isEnabled = isInstalled && isLoaded;
 
             // Create the main action button (Install/Uninstall)
@@ -287,25 +319,20 @@ export class JotsSettingTab extends PluginSettingTab {
                                 //@ts-ignore - Access internal Obsidian API
                                 else await this.app.plugins.disablePluginAndSave(id);
                                 await this.checkDependencies();
-                                const state = this.dependencyState[id];
-                                btn.setDisabled(state?.isEnabled ?? false);
+                                const newState = this.dependencyState[id];
+                                btn.setDisabled(newState?.isEnabled ?? false);
                             });
                     });
                 }
             });
         };
 
-        // Create controls for each required dependency
+        // Create controls for just the Dataview dependency
         await createDependencyControls(
             'Dataview',
             'Required for advanced JOTS features',
             'dataview',
             'blacksmithgu/obsidian-dataview'
-        ); await createDependencyControls(
-            'Virtual Footer',
-            'Required for JOTS footer integration',
-            'virtual-footer',
-            'Signynt/virtual-footer'
         );
 
         // JOTS Plugins section
@@ -315,89 +342,15 @@ export class JotsSettingTab extends PluginSettingTab {
             text: 'Additional plugins that extend JOTS functionality.'
         }).addClass('setting-item-description');
 
+        // Create controls for each JOTS plugin
         for (const plugin of JOTS_PLUGINS) {
             const id = plugin.repo.split('/')[1]; // Get plugin ID from repo
-            const setting = new Setting(containerEl)
-                .setName(plugin.name)
-                .setDesc(plugin.description);
-
-            const isInstalled = this.dependencyState[id]?.isInstalled;
-            const isLoaded = (this.app as unknown as ExtendedApp).plugins?.plugins[id] !== undefined;
-            const isEnabled = isInstalled && isLoaded;
-
-            // Create the main action button (Install/Uninstall)
-            setting.addButton(btn => {
-                if (!isInstalled) {
-                    btn.setButtonText('Install')
-                        .setCta()
-                        .onClick(async () => {
-                            btn.setButtonText('Installing...');
-                            btn.setDisabled(true);
-                            const success = await this.plugin.pluginManager.addPlugin(plugin.repo);
-                            await this.checkDependencies();
-                            const state = this.dependencyState[id];
-
-                            if (success && state?.isInstalled) {
-                                btn.setButtonText('Uninstall')
-                                    .removeCta()
-                                    .setDisabled(state.isEnabled);
-
-                                // Add toggle since plugin is now installed
-                                setting.addToggle(toggle => {
-                                    toggle.setValue(state.isEnabled)
-                                        .setTooltip(state.isEnabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`)
-                                        .onChange(async (value) => {
-                                            //@ts-ignore - Access internal Obsidian API
-                                            if (value) await this.app.plugins.enablePluginAndSave(id);
-                                            //@ts-ignore - Access internal Obsidian API
-                                            else await this.app.plugins.disablePluginAndSave(id);
-                                            await this.checkDependencies();
-                                            const newState = this.dependencyState[id];
-                                            btn.setDisabled(newState?.isEnabled ?? false);
-                                        });
-                                });
-                            } else {
-                                btn.setButtonText('Install')
-                                    .setCta()
-                                    .setDisabled(false);
-                            }
-                        });
-                } else {
-                    btn.setButtonText('Uninstall')
-                        .setDisabled(isEnabled)
-                        .onClick(async () => {
-                            btn.setButtonText('Uninstalling...');
-                            btn.setDisabled(true);
-                            await this.plugin.pluginManager.uninstallPlugin(id);
-                            await this.checkDependencies();
-                            const state = this.dependencyState[id];
-
-                            if (!state?.isInstalled) {
-                                btn.setButtonText('Install')
-                                    .setCta()
-                                    .setDisabled(false);
-
-                                // Remove the toggle since plugin is now uninstalled
-                                setting.components = setting.components.filter(c => c instanceof ButtonComponent);
-                            }
-                        });
-
-                    // Add toggle for installed plugins
-                    setting.addToggle(toggle => {
-                        toggle.setValue(isEnabled)
-                            .setTooltip(isEnabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`)
-                            .onChange(async (value) => {
-                                //@ts-ignore - Access internal Obsidian API
-                                if (value) await this.app.plugins.enablePluginAndSave(id);
-                                //@ts-ignore - Access internal Obsidian API
-                                else await this.app.plugins.disablePluginAndSave(id);
-                                await this.checkDependencies();
-                                const newState = this.dependencyState[id];
-                                btn.setDisabled(newState?.isEnabled ?? false);
-                            });
-                    });
-                }
-            });
+            await createDependencyControls(
+                plugin.name,
+                plugin.description,
+                id,
+                plugin.repo
+            );
         }
     }
 

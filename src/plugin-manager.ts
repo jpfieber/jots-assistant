@@ -59,24 +59,23 @@ export class PluginManager {
                 return false;
             }
 
+            // Get current version if plugin is installed
+            const currentVersion = await this.getInstalledVersion(manifest.id);
+
+            // Compare with latest version
+            const comparison = this.compareVersions(currentVersion, manifest.version);
+
+            // If plugin is installed and up to date, skip update
+            if (currentVersion && comparison >= 0) {
+                // Only log message if explicitly checking for updates
+                console.log(`Plugin ${manifest.name} is up to date (${currentVersion})`);
+                return false;
+            }
+
             // Get release files
             const releaseFiles = await this.getReleaseFiles(scrubbedPath, manifest);
             if (!releaseFiles) {
                 return false;
-            }
-
-            // Get current version if plugin is installed
-            const pluginDir = `${this.plugin.app.vault.configDir}/plugins/${manifest.id}/`;
-            const { adapter } = this.plugin.app.vault;
-            let currentVersion: string | null = null;
-
-            if (await adapter.exists(`${pluginDir}manifest.json`)) {
-                try {
-                    const existingManifest = JSON.parse(await adapter.read(`${pluginDir}manifest.json`));
-                    currentVersion = existingManifest.version;
-                } catch (e) {
-                    // Ignore error reading current version
-                }
             }
 
             // Write files to plugin folder
@@ -100,6 +99,83 @@ export class PluginManager {
             console.error('Error installing plugin:', error);
             new Notice(`Failed to install plugin: ${error.message}`);
             return false;
+        }
+    }
+
+    // Version retrieval methods
+    async getInstalledVersion(pluginId: string): Promise<string | null> {
+        try {
+            const app = this.plugin.app;
+            const pluginDir = `${app.vault.configDir}/plugins/${pluginId}/`;
+            const { adapter } = app.vault;
+
+            // Check if manifest exists
+            if (!await adapter.exists(`${pluginDir}manifest.json`)) {
+                return null;
+            }
+
+            // Read and parse manifest
+            const manifestContent = await adapter.read(`${pluginDir}manifest.json`);
+            const manifest = JSON.parse(manifestContent);
+            return manifest.version || null;
+        } catch (error) {
+            console.error(`Error getting installed version for ${pluginId}:`, error);
+            return null;
+        }
+    }
+
+    async getLatestVersion(repositoryPath: string): Promise<string | null> {
+        try {
+            const headers: Record<string, string> = {
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'jots-assistant'
+            };
+
+            if (this.plugin.settings.personalAccessToken) {
+                headers.Authorization = `token ${this.plugin.settings.personalAccessToken}`;
+            }
+
+            // First try master branch manifest as it usually has latest stable version
+            try {
+                const response = await requestUrl({
+                    url: `https://raw.githubusercontent.com/${repositoryPath}/master/manifest.json`,
+                    headers
+                });
+
+                if (response.status === 200) {
+                    try {
+                        const manifest = JSON.parse(response.text);
+                        if (manifest.version) {
+                            return manifest.version;
+                        }
+                    } catch (e) {
+                        console.log('Error parsing master manifest:', e);
+                    }
+                }
+            } catch (e) {
+                console.log('Error fetching master manifest:', e);
+            }
+
+            // If master check fails, fall back to latest stable release
+            const release = await this.getRelease(repositoryPath, headers);
+            if (release) {
+                const manifestContent = await this.fetchReleaseFile(release, 'manifest.json', headers);
+                if (manifestContent) {
+                    try {
+                        const manifest = JSON.parse(manifestContent);
+                        if (manifest.version) {
+                            return manifest.version;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing release manifest:', error);
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            console.error(`Error getting latest version for ${repositoryPath}:`, error);
+            return null;
         }
     }
 
@@ -215,13 +291,14 @@ export class PluginManager {
                 return null;
             }
 
-            // Filter for valid releases with assets
+            // Filter for valid releases with assets, excluding pre-releases and drafts
             const validReleases = releases.filter(r =>
                 r.assets &&
                 Array.isArray(r.assets) &&
                 r.assets.length > 0 &&
                 r.tag_name &&
-                !r.draft
+                !r.draft &&
+                !r.prerelease
             );
 
             if (validReleases.length === 0) {
@@ -616,5 +693,30 @@ export class PluginManager {
             console.error(`Error fetching ${filename}:`, error);
             throw error;
         }
+    }
+
+    private compareVersions(version1: string | null, version2: string | null): number {
+        // Handle null values
+        if (version1 === null && version2 === null) return 0;
+        if (version1 === null) return -1;
+        if (version2 === null) return 1;
+
+        const v1 = this.coerceSemver(version1);
+        const v2 = this.coerceSemver(version2);
+
+        // Handle invalid versions
+        if (!v1 && !v2) return 0;
+        if (!v1) return -1;
+        if (!v2) return 1;
+
+        const v1Parts = v1.split('.').map(Number);
+        const v2Parts = v2.split('.').map(Number);
+
+        // Compare each part
+        for (let i = 0; i < 3; i++) {
+            if (v2Parts[i] > v1Parts[i]) return -1; // v2 is newer
+            if (v2Parts[i] < v1Parts[i]) return 1;  // v1 is newer
+        }
+        return 0; // versions are equal
     }
 }
