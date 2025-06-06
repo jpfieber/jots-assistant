@@ -321,16 +321,57 @@ export default class JotsPlugin extends Plugin {
 		observer.observe(view.previewMode.containerEl, { childList: true, subtree: true });
 		this.previewObservers.set(view, observer);
 	}
-
 	private attachInternalLinkHandlers(element: HTMLElement, sourcePath: string, component: Component): void {
-		element.querySelectorAll('a.internal-link').forEach(link => {
-			component.registerDomEvent(link as HTMLElement, 'click', (evt: MouseEvent) => {
+		// Create a mutation observer to watch for dynamically added links (e.g., from DataviewJS)
+		const observer = new MutationObserver((mutations) => {
+			mutations.forEach(mutation => {
+				if (mutation.type === 'childList') {
+					mutation.addedNodes.forEach(node => {
+						if (node instanceof HTMLElement) {
+							this.processLinks(node, sourcePath, component);
+						}
+					});
+				}
+			});
+		});
+
+		// Start observing the element for any changes in the DOM
+		observer.observe(element, {
+			childList: true,
+			subtree: true
+		});
+
+		// Store the observer in the component for cleanup
+		component.register(() => observer.disconnect());
+
+		// Process any existing links
+		this.processLinks(element, sourcePath, component);
+	}
+
+	private processLinks(element: HTMLElement, sourcePath: string, component: Component): void {
+		// Handle all links in the rendered content
+		element.querySelectorAll('a').forEach(link => {
+			// Skip if we've already processed this link
+			if (link.hasAttribute('data-jots-processed')) return;
+
+			const href = link.getAttribute('href');
+
+			// Skip external links (those starting with http:// or https://)
+			if (href?.match(/^https?:\/\//)) {
+				link.setAttribute('data-jots-processed', 'true');
+				return;
+			}
+
+			// For all other links, treat them as internal
+			component.registerDomEvent(link, 'click', (evt: MouseEvent) => {
 				evt.preventDefault();
-				const href = (link as HTMLAnchorElement).getAttribute('href');
 				if (href) {
 					this.app.workspace.openLinkText(href, sourcePath, evt.ctrlKey || evt.metaKey);
 				}
 			});
+
+			// Mark the link as processed
+			link.setAttribute('data-jots-processed', 'true');
 		});
 	}
 
