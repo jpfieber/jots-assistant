@@ -101,3 +101,104 @@
     margin: 12px 0;
     color: var(--text-normal);
 }
+
+/* --- Virtual Footer Styles --- */
+
+/* Rule container */
+.virtual-footer-rules-container {
+    margin-top: 1em;
+}
+
+/* Individual rule item */
+.virtual-footer-rule-item {
+    margin-bottom: 1em;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 0.5em;
+}
+
+/* Rule heading */
+.virtual-footer-rule-heading {
+    margin: 0;
+    padding: 0.5em;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Rule content container */
+.virtual-footer-rule-content {
+    padding: 0.5em;
+}
+
+/* Hide content when collapsed */
+.virtual-footer-rule-item.is-collapsed .virtual-footer-rule-content {
+    display: none;
+}
+
+/* Rule actions */
+.virtual-footer-rule-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1em;
+    padding-top: 1em;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.virtual-footer-actions-spacer {
+    flex: 1;
+}
+
+/* Buttons */
+.virtual-footer-move-button {
+    padding: 0 0.5em;
+}
+
+.virtual-footer-delete-button {
+    margin-left: auto;
+}
+
+/* Add button */
+.virtual-footer-add-button {
+    margin-top: 1em;
+    width: 100%;
+}
+
+/* Text areas */
+.virtual-footer-rule-content textarea {
+    min-height: 100px;
+    width: 100%;
+    font-family: var(--font-monospace);
+}
+
+/* --- Dynamic Content Styling --- */
+.jots-dynamic-content-element {
+    width: 100%;
+    padding: 0 var(--file-margins);
+    margin: 1em 0;
+}
+
+.jots-header-group {
+    border-bottom: 1px solid var(--divider-color);
+    margin-bottom: 2em;
+}
+
+.jots-footer-group {
+    border-top: 1px solid var(--divider-color);
+    margin-top: 2em;
+}
+
+.jots-header-rendered-content,
+.jots-footer-rendered-content {
+    padding: 1em 0;
+}
+
+/* Live Preview Adjustments */
+.jots-cm-padding {
+    padding-bottom: 100px !important;
+    /* Space for footer in live preview */
+}
+
+.jots-remove-flex {
+    display: block !important;
+}

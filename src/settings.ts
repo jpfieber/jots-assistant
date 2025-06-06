@@ -1,4 +1,4 @@
-import { App, ButtonComponent, PluginSettingTab, Setting } from 'obsidian';
+import { AbstractInputSuggest, App, ButtonComponent, PluginSettingTab, Setting, MarkdownView, getAllTags } from 'obsidian';
 import JotsPlugin from './main';
 
 export type JotsSectionFormat = 'Plain' | 'Foldable-Open' | 'Foldable-Closed';
@@ -25,8 +25,8 @@ export interface JotsSettings {
     journalFilePattern: string;
     personalAccessToken?: string; // GitHub personal access token for rate limits
     updateAtStartup: boolean; // Whether to auto-update plugins at startup
-    headerContent: string; // Content for the header section
-    footerContent: string; // Content for the footer section
+    rules: Rule[]; // Virtual Footer rules
+    refreshOnFileOpen?: boolean; // Whether to refresh headers/footers on file open
 }
 
 interface DependencyState {
@@ -171,7 +171,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.updateAtStartup)
                 .onChange(async (value) => {
                     this.plugin.settings.updateAtStartup = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshViews: false });
                 }));
 
         containerEl.createEl('hr');
@@ -303,7 +303,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.sectionName)
                 .onChange(async (value) => {
                     this.plugin.settings.sectionName = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshType: 'styles' });
                 }));
 
         new Setting(containerEl)
@@ -313,7 +313,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.labelColor)
                 .onChange(async (value) => {
                     this.plugin.settings.labelColor = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshType: 'styles' });
                 }));
 
         new Setting(containerEl)
@@ -324,7 +324,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.sectionIcon)
                 .onChange(async (value) => {
                     this.plugin.settings.sectionIcon = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshType: 'styles' });
                 }));
 
         new Setting(containerEl)
@@ -355,15 +355,14 @@ export class JotsSettingTab extends PluginSettingTab {
                     // Validate that each entry is a single letter
                     const validLetters = letters.filter(letter => /^[A-Z]$/.test(letter));
 
-                    // Store all letters in uppercase for consistent comparison
-                    this.plugin.settings.taskLetters = validLetters;
+                    // Store all letters in uppercase for consistent comparison                    this.plugin.settings.taskLetters = validLetters;
 
                     // Show the normalized version (uppercase) to the user
                     if (validLetters.length !== letters.length) {
                         text.setValue(validLetters.join(','));
                     }
 
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshType: 'content' });
                 }));
     }
 
@@ -382,7 +381,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.journalRootFolder)
                 .onChange(async (value) => {
                     this.plugin.settings.journalRootFolder = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshViews: false });
                 }));
 
         new Setting(containerEl)
@@ -393,7 +392,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.journalFolderPattern)
                 .onChange(async (value) => {
                     this.plugin.settings.journalFolderPattern = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshViews: false });
                 }));
 
         new Setting(containerEl)
@@ -404,45 +403,453 @@ export class JotsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.journalFilePattern)
                 .onChange(async (value) => {
                     this.plugin.settings.journalFilePattern = value;
-                    await this.plugin.saveSettings();
+                    await this.plugin.saveSettings({ refreshViews: false });
                 }));
+    }    // Track expanded state of rules
+    private ruleExpandedStates: boolean[] = [];
+
+    private getAvailableFolderPaths(): Set<string> {
+        const paths = new Set<string>();
+        const files = this.plugin.app.vault.getAllLoadedFiles();
+        files.forEach(file => {
+            let path = file.parent?.path;
+            while (path && path !== '/') {
+                paths.add(path + '/');
+                path = path.substring(0, path.lastIndexOf('/'));
+            }
+        });
+        paths.add('/'); // Add root folder
+        return paths;
+    }
+
+    private getAvailableTags(): Set<string> {
+        const tags = new Set<string>();
+        this.plugin.app.vault.getMarkdownFiles().forEach(file => {
+            const fileCache = this.plugin.app.metadataCache.getFileCache(file);
+            if (fileCache) {
+                const fileTags = getAllTags(fileCache) || [];
+                fileTags.forEach(tag => tags.add(tag));
+            }
+        });
+        return tags;
+    }
+
+    private getAvailablePropertyNames(): Set<string> {
+        const properties = new Set<string>();
+        this.plugin.app.vault.getMarkdownFiles().forEach(file => {
+            const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+            if (frontmatter) {
+                Object.keys(frontmatter).forEach(key => properties.add(key));
+            }
+        });
+        return properties;
+    }
+
+    private getAvailableMarkdownFilePaths(): Set<string> {
+        const paths = new Set<string>();
+        this.plugin.app.vault.getMarkdownFiles().forEach(file => {
+            paths.add(file.path);
+        });
+        return paths;
     }
 
     createHeadersFootersSettings(containerEl: HTMLElement): void {
         containerEl.createEl('p', {
-            text: 'Configure the headers and footers for your Jots. You can use Markdown and Dataview queries here.'
-        }).addClass('setting-item-description', 'jots-settings-description');
+            text: 'Configure rules for automatically adding headers and footers to your notes. Each rule can match files by folder, tag, or property.'
+        }).addClass('setting-item-description');
 
         containerEl.createEl('hr');
 
+        // Global settings
         new Setting(containerEl)
-            .setName('Header Content')
-            .setDesc('Markdown content to be added at the start of each Jots section')
-            .addTextArea(text => text
-                .setPlaceholder('## My Jots\n')
-                .setValue(this.plugin.settings.headerContent)
+            .setName('Refresh on file open')
+            .setDesc('Refresh headers and footers when opening a note')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.refreshOnFileOpen ?? false)
                 .onChange(async (value) => {
-                    this.plugin.settings.headerContent = value;
+                    this.plugin.settings.refreshOnFileOpen = value;
+                    // This only affects future file opens, no need to refresh now
+                    await this.plugin.saveSettings({ refreshViews: false });
+                }));
+
+        containerEl.createEl('hr');
+
+        // Ensure rules array exists
+        if (!this.plugin.settings.rules) {
+            this.plugin.settings.rules = DEFAULT_SETTINGS.rules;
+        }
+
+        // Initialize expanded states
+        while (this.ruleExpandedStates.length < this.plugin.settings.rules.length) {
+            this.ruleExpandedStates.push(false);
+        }
+        if (this.ruleExpandedStates.length > this.plugin.settings.rules.length) {
+            this.ruleExpandedStates.length = this.plugin.settings.rules.length;
+        }
+
+        // Create container for rules
+        const rulesContainer = containerEl.createDiv('rules-container virtual-footer-rules-container');
+
+        // Render rules
+        this.plugin.settings.rules.forEach((rule, index) => {
+            this.renderRuleControls(rule, index, rulesContainer);
+        });
+
+        // Add new rule button
+        new Setting(containerEl)
+            .addButton(button => button
+                .setButtonText('Add new rule')
+                .setCta()
+                .onClick(async () => {
+                    const newRule = {
+                        name: 'New Rule',
+                        enabled: true,
+                        type: RuleType.Folder,
+                        path: '',  // Match all files
+                        recursive: true,
+                        contentSource: ContentSource.Text,
+                        footerText: '',
+                        renderLocation: RenderLocation.Footer
+                    }; this.plugin.settings.rules.push(newRule);
+                    this.ruleExpandedStates.push(true);  // New rules start expanded
+                    await this.plugin.saveSettings({ refreshType: 'content' });
+                    this.display();
+                }));
+    }
+
+    private renderRuleControls(rule: Rule, index: number, containerEl: HTMLElement): void {
+        const ruleDiv = containerEl.createDiv('rule-item virtual-footer-rule-item');
+
+        if (!this.ruleExpandedStates[index]) {
+            ruleDiv.addClass('is-collapsed');
+        }
+
+        const ruleNameDisplay = rule.name?.trim() || 'Unnamed Rule';
+        const ruleHeading = ruleDiv.createEl('h4', {
+            text: `Rule ${index + 1}: ${ruleNameDisplay}`,
+            cls: 'virtual-footer-rule-heading'
+        });
+
+        const ruleContent = ruleDiv.createDiv('virtual-footer-rule-content');
+
+        ruleHeading.addEventListener('click', () => {
+            const isNowExpanded = !ruleDiv.classList.toggle('is-collapsed');
+            this.ruleExpandedStates[index] = isNowExpanded;
+        });
+
+        // Rule Settings
+        new Setting(ruleContent)
+            .setName('Rule name')
+            .setDesc('A descriptive name for this rule')
+            .addText(text => text
+                .setPlaceholder('e.g., Project Notes Footer')
+                .setValue(rule.name || '')
+                .onChange(async (value) => {
+                    rule.name = value;
+                    ruleHeading.textContent = `Rule ${index + 1}: ${value.trim() || 'Unnamed Rule'}`;
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('Footer Content')
-            .setDesc('Markdown content to be added at the end of each Jots section')
-            .addTextArea(text => text
-                .setPlaceholder('---\nGenerated by JOTS')
-                .setValue(this.plugin.settings.footerContent)
+        new Setting(ruleContent)
+            .setName('Enabled')
+            .setDesc('If disabled, this rule will not be applied')
+            .addToggle(toggle => toggle
+                .setValue(rule.enabled ?? true)
                 .onChange(async (value) => {
-                    this.plugin.settings.footerContent = value;
-                    await this.plugin.saveSettings();
+                    rule.enabled = value;
+                    await this.plugin.saveSettings({ refreshType: 'content' });
                 }));
+
+        new Setting(ruleContent)
+            .setName('Rule type')
+            .setDesc('Apply this rule based on folder, tag, or property')
+            .addDropdown(dropdown => dropdown
+                .addOption(RuleType.Folder, 'Folder')
+                .addOption(RuleType.Tag, 'Tag')
+                .addOption(RuleType.Property, 'Property')
+                .setValue(rule.type)
+                .onChange(async (value: string) => {
+                    rule.type = value as RuleType;
+                    await this.plugin.saveSettings({ refreshType: 'content' });
+                    this.display();
+                }));
+
+        // Type-specific settings
+        if (rule.type === RuleType.Folder) {
+            new Setting(ruleContent)
+                .setName('Folder path')
+                .setDesc('Path for the rule. Use "" for all files, "/" for root folder')
+                .addText(text => {
+                    text.setPlaceholder('e.g., Projects/ or / or empty for all')
+                        .setValue(rule.path || '')
+                        .onChange(async (value) => {
+                            rule.path = value;
+                            await this.plugin.saveSettings();
+                        });
+                    new MultiSuggest(
+                        text.inputEl,
+                        this.getAvailableFolderPaths(),
+                        async (value) => {
+                            rule.path = value;
+                            text.setValue(value);
+                            await this.plugin.saveSettings();
+                        },
+                        this.plugin.app
+                    );
+                });
+
+            new Setting(ruleContent)
+                .setName('Include subfolders')
+                .setDesc('If enabled, rule applies to files in subfolders')
+                .addToggle(toggle => toggle
+                    .setValue(rule.recursive ?? true)
+                    .setDisabled(rule.path === "")
+                    .onChange(async (value) => {
+                        rule.recursive = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+        } else if (rule.type === RuleType.Tag) {
+            new Setting(ruleContent)
+                .setName('Tag')
+                .setDesc('Tag to match (without #)')
+                .addText(text => {
+                    text.setPlaceholder('e.g., project or status/done')
+                        .setValue(rule.tag || '')
+                        .onChange(async (value) => {
+                            rule.tag = value.startsWith('#') ? value.substring(1) : value;
+                            await this.plugin.saveSettings();
+                        });
+                    new MultiSuggest(
+                        text.inputEl,
+                        this.getAvailableTags(),
+                        async (value) => {
+                            rule.tag = value.startsWith('#') ? value.substring(1) : value;
+                            text.setValue(rule.tag);
+                            await this.plugin.saveSettings();
+                        },
+                        this.plugin.app
+                    );
+                });
+
+            new Setting(ruleContent)
+                .setName('Include subtags')
+                .setDesc('If enabled, matches subtags (e.g., project/subtag)')
+                .addToggle(toggle => toggle
+                    .setValue(rule.includeSubtags ?? false)
+                    .onChange(async (value) => {
+                        rule.includeSubtags = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+        } else if (rule.type === RuleType.Property) {
+            new Setting(ruleContent)
+                .setName('Property name')
+                .setDesc('The frontmatter property to match')
+                .addText(text => {
+                    text.setPlaceholder('e.g., status or type')
+                        .setValue(rule.propertyName || '')
+                        .onChange(async (value) => {
+                            rule.propertyName = value;
+                            await this.plugin.saveSettings();
+                        });
+                    new MultiSuggest(
+                        text.inputEl,
+                        this.getAvailablePropertyNames(),
+                        async (value) => {
+                            rule.propertyName = value;
+                            text.setValue(value);
+                            await this.plugin.saveSettings();
+                        },
+                        this.plugin.app
+                    );
+                });
+
+            new Setting(ruleContent)
+                .setName('Property value')
+                .setDesc('The value the property should have')
+                .addText(text => text
+                    .setPlaceholder('e.g., complete or draft')
+                    .setValue(rule.propertyValue || '')
+                    .onChange(async (value) => {
+                        rule.propertyValue = value;
+                        await this.plugin.saveSettings();
+                    }));
+        }
+
+        new Setting(ruleContent)
+            .setName('Content source')
+            .setDesc('Where to get the content from')
+            .addDropdown(dropdown => dropdown
+                .addOption(ContentSource.Text, 'Direct text')
+                .addOption(ContentSource.File, 'Markdown file')
+                .setValue(rule.contentSource)
+                .onChange(async (value: string) => {
+                    rule.contentSource = value as ContentSource;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        if (rule.contentSource === ContentSource.File) {
+            new Setting(ruleContent)
+                .setName('Content file')
+                .setDesc('The markdown file to use as content')
+                .addText(text => {
+                    text.setPlaceholder('e.g., templates/footer.md')
+                        .setValue(rule.footerFilePath || '')
+                        .onChange(async (value) => {
+                            rule.footerFilePath = value;
+                            await this.plugin.saveSettings({ refreshType: 'content' });
+                        });
+                    new MultiSuggest(
+                        text.inputEl,
+                        this.getAvailableMarkdownFilePaths(),
+                        async (value) => {
+                            rule.footerFilePath = value;
+                            text.setValue(value);
+                            await this.plugin.saveSettings();
+                        },
+                        this.plugin.app
+                    );
+                });
+        } else {
+            new Setting(ruleContent)
+                .setName('Content')
+                .setDesc('The markdown content to insert')
+                .addTextArea(text => text
+                    .setPlaceholder('Enter markdown content...')
+                    .setValue(rule.footerText)
+                    .onChange(async (value) => {
+                        rule.footerText = value;
+                        await this.plugin.saveSettings({ refreshType: 'content' });
+                    }));
+        }
+
+        new Setting(ruleContent)
+            .setName('Render location')
+            .setDesc('Where to insert the content')
+            .addDropdown(dropdown => dropdown
+                .addOption(RenderLocation.Footer, 'Footer')
+                .addOption(RenderLocation.Header, 'Header')
+                .setValue(rule.renderLocation)
+                .onChange(async (value: string) => {
+                    rule.renderLocation = value as RenderLocation;
+                    await this.plugin.saveSettings({ refreshType: 'content' });
+                }));
+
+        // Rule actions
+        const ruleActions = new Setting(ruleContent)
+            .setClass('virtual-footer-rule-actions');
+
+        // Move Up button
+        ruleActions.addButton(button => button
+            .setIcon('arrow-up')
+            .setTooltip('Move rule up')
+            .setDisabled(index === 0)
+            .onClick(async () => {
+                if (index > 0) {
+                    const rules = this.plugin.settings.rules;
+                    const rule = rules.splice(index, 1)[0];
+                    rules.splice(index - 1, 0, rule);
+
+                    const expandedState = this.ruleExpandedStates.splice(index, 1)[0];
+                    this.ruleExpandedStates.splice(index - 1, 0, expandedState);
+
+                    await this.plugin.saveSettings({ refreshType: 'content' });
+                    this.display();
+                }
+            }));
+
+        // Move Down button
+        ruleActions.addButton(button => button
+            .setIcon('arrow-down')
+            .setTooltip('Move rule down')
+            .setDisabled(index === this.plugin.settings.rules.length - 1)
+            .onClick(async () => {
+                if (index < this.plugin.settings.rules.length - 1) {
+                    const rules = this.plugin.settings.rules;
+                    const rule = rules.splice(index, 1)[0];
+                    rules.splice(index + 1, 0, rule);
+
+                    const expandedState = this.ruleExpandedStates.splice(index, 1)[0];
+                    this.ruleExpandedStates.splice(index + 1, 0, expandedState);
+
+                    await this.plugin.saveSettings({ refreshType: 'content' });
+                    this.display();
+                }
+            }));
+
+        // Spacer
+        ruleActions.controlEl.createDiv({ cls: 'virtual-footer-actions-spacer' });
+
+        // Delete button
+        ruleActions.addButton(button => button
+            .setButtonText('Delete rule')
+            .setWarning()
+            .onClick(async () => {
+                this.plugin.settings.rules.splice(index, 1);
+                this.ruleExpandedStates.splice(index, 1);
+                await this.plugin.saveSettings({ refreshType: 'content' });
+                this.display();
+            }));
     }
+}
+
+// --- Virtual Footer Types ---
+export enum RuleType {
+    Folder = 'folder',
+    Tag = 'tag',
+    Property = 'property',
+}
+
+export enum ContentSource {
+    Text = 'text',
+    File = 'file',
+}
+
+export enum RenderLocation {
+    Footer = 'footer',
+    Header = 'header',
+}
+
+export interface Rule {
+    name?: string;
+    enabled?: boolean;
+    type: RuleType;
+    path?: string;
+    tag?: string;
+    recursive?: boolean;
+    includeSubtags?: boolean;
+    propertyName?: string;
+    propertyValue?: string;
+    contentSource: ContentSource;
+    footerText: string;
+    footerFilePath?: string;
+    renderLocation: RenderLocation;
 }
 
 export const DEFAULT_SETTINGS: JotsSettings = {
     sectionName: 'JOTS',
-    headerContent: '## JOTS\n',
-    footerContent: '---\nManaged by JOTS',
+    rules: [{
+        name: 'Default JOTS Header',
+        enabled: true,
+        type: RuleType.Folder,
+        path: '', // Matches all files
+        recursive: true,
+        contentSource: ContentSource.Text,
+        footerText: '## JOTS\n',
+        renderLocation: RenderLocation.Header,
+    }, {
+        name: 'Default JOTS Footer',
+        enabled: true,
+        type: RuleType.Folder,
+        path: '', // Matches all files
+        recursive: true,
+        contentSource: ContentSource.Text,
+        footerText: '---\nManaged by JOTS',
+        renderLocation: RenderLocation.Footer,
+    }],
+    refreshOnFileOpen: false,
     sectionIcon: `<svg enable-background="new 0 0 512 512" version="1.1" viewBox="0 0 512 512" xml:space="preserve" xmlns="http://www.w3.org/2000/svg">
 <path d="m305.93 418.92c-26.828 38.057-63.403 55.538-109.44 55.029-46.309-0.51208-92.629-0.10562-138.94-0.1196-13.622-0.004119-24.352-9.1858-25.925-22.11-1.829-15.037 6.0142-27.026 19.865-30.147 2.2417-0.50519 4.6213-0.54819 6.9375-0.5509 29.488-0.034637 58.979 0.23877 88.464-0.090301 35.371-0.39474 62.735-15.755 79.889-46.723 44.762-80.809 88.894-161.97 133.28-242.98 0.86243-1.5741 1.7962-3.1091 2.8304-4.8929 20.175 28.278 45.373 45.663 82.159 40.199-2.4802 4.5968-4.9266 9.2147-7.4479 13.791-43.214 78.443-86.436 156.88-129.66 235.32-0.56052 1.017-1.2266 1.9758-2.0111 3.2818z" fill="#000"/>
 <path d="m31.481 206.92c0.12606-16.992 10.285-27.084 26.844-27.085 45.311-0.002991 90.626 0.34482 135.93-0.18555 16.216-0.18983 27.237 12.775 27.018 25.768-0.27806 16.481-10.372 27.253-27.004 27.386-19.656 0.15742-39.314 0.037079-58.971 0.037094-25.487 0-50.975 0.076645-76.462-0.027741-16.297-0.066757-26.574-9.7617-27.356-25.893z" fill="#000"/>
@@ -459,3 +866,35 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     personalAccessToken: '',
     updateAtStartup: true
 };
+
+/**
+ * A suggestion provider for input fields, offering autocompletion from a given set of strings.
+ */
+export class MultiSuggest extends AbstractInputSuggest<string> {
+    constructor(
+        private inputEl: HTMLInputElement,
+        private content: Set<string>,
+        private onSelectCb: (value: string) => void,
+        app: App
+    ) {
+        super(app, inputEl);
+    }
+
+    getSuggestions(inputStr: string): string[] {
+        const lowerCaseInputStr = inputStr.toLocaleLowerCase();
+        return [...this.content].filter((contentItem) =>
+            contentItem.toLocaleLowerCase().includes(lowerCaseInputStr)
+        );
+    }
+
+    renderSuggestion(content: string, el: HTMLElement): void {
+        el.setText(content);
+    }
+
+    selectSuggestion(content: string, _evt: MouseEvent | KeyboardEvent): void {
+        this.onSelectCb(content);
+        this.inputEl.value = content;
+        this.inputEl.blur();
+        this.close();
+    }
+}
