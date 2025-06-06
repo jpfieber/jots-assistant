@@ -29,17 +29,17 @@ const JOTS_PLUGINS: JotsPluginInfo[] = [
     {
         repo: 'jpfieber/jots-inbox-processor',
         name: 'Inbox Processor',
-        description: 'JOTS plugin to process inbox items'
+        description: 'Your Rules, Your Files, Perfectly Placed'
     },
     {
         repo: 'jpfieber/jots-yesterdays-weather',
         name: "Yesterday's Weather",
-        description: 'JOTS plugin to display weather information'
+        description: 'Weather That Stays With You'
     },
     {
         repo: 'jpfieber/jots-sleep-tracker',
         name: "Sleep Tracker",
-        description: 'JOTS plugin to track sleep patterns'
+        description: 'Monitor Your Sleep, Master Your Day!'
     }
 ];
 
@@ -188,8 +188,6 @@ export class JotsSettingTab extends PluginSettingTab {
     async createJotsTab(containerEl: HTMLElement): Promise<void> {
         await this.checkDependencies();
 
-        containerEl.createEl('h3', { text: 'Plugin Dependencies' });
-
         // Auto-update setting
         new Setting(containerEl)
             .setName('Auto-update plugins at startup')
@@ -201,12 +199,7 @@ export class JotsSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings({ refreshViews: false });
                 }));
 
-        containerEl.createEl('hr');
-
-        // Add description for required plugins
-        containerEl.createEl('p', {
-            text: 'These plugins are required for JOTS to function properly.'
-        }).addClass('setting-item-description');
+        containerEl.createEl('h3', { text: 'JOTS Dependencies' });
 
         // Helper function to create dependency controls
         const createDependencyControls = async (
@@ -233,14 +226,14 @@ export class JotsSettingTab extends PluginSettingTab {
 
                 // Add version info
                 const versionInfo = el.createDiv();
-                versionInfo.style.marginTop = '8px';
-
-                // Version info will be populated asynchronously
+                versionInfo.style.marginTop = '8px';                // Version info will be populated asynchronously
                 Promise.all([
                     this.plugin.pluginManager.getInstalledVersion(id),
                     this.plugin.pluginManager.getLatestVersion(repo)
                 ]).then(([installedVer, latestVer]) => {
-                    const versionText = `Version Information: Installed = v${installedVer || 'N/A'} Latest = v${latestVer || 'N/A'}`;
+                    // If installed, show installed version, otherwise show latest version
+                    const versionNumber = isInstalled ? (installedVer || 'N/A') : (latestVer || 'N/A');
+                    const versionText = `Version: v${versionNumber}`;
                     versionInfo.createSpan({
                         text: versionText,
                         cls: latestVer && installedVer && latestVer !== installedVer ? 'jots-latest-version' : ''
@@ -330,7 +323,7 @@ export class JotsSettingTab extends PluginSettingTab {
         // Create controls for just the Dataview dependency
         await createDependencyControls(
             'Dataview',
-            'Required for advanced JOTS features',
+            'Dataview is required for many of the JOTS features to work properly. Within the Dataview settings, ensure "Enable JavaScript queries" is enabled.',
             'dataview',
             'blacksmithgu/obsidian-dataview'
         );
