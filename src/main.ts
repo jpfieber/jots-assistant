@@ -24,6 +24,11 @@ export default class JotsPlugin extends Plugin {
 		// Set initial dynamic styles
 		this.updateStyles();
 
+		// Check for plugin updates if enabled
+		if (this.settings.updateAtStartup) {
+			this.checkForUpdates();
+		}
+
 		// Register commands
 		registerCommands(this);
 
@@ -51,5 +56,36 @@ export default class JotsPlugin extends Plugin {
 	private updateStyles() {
 		const iconWithColor = this.settings.sectionIcon.replace('"black"', `"${this.settings.labelColor}"`);
 		this.styleEl.textContent = generateJotsIconCss(this.settings.sectionName, iconWithColor, this.settings.labelColor);
+	}
+
+	async checkForUpdates() {
+		// Get the list of installed plugins that we manage
+		const app = this.app as any;
+		const plugins = app.plugins;
+		const pluginDir = `${app.vault.configDir}/plugins/`;
+		const { adapter } = app.vault;
+		const managedPlugins = ['dataview', 'virtual-footer'];
+
+		for (const pluginId of managedPlugins) {
+			const pluginPath = `${pluginDir}${pluginId}/`;
+
+			// Skip if plugin isn't installed
+			if (!await adapter.exists(pluginPath)) {
+				continue;
+			}
+
+			try {
+				// Get plugin repository path
+				const manifest = plugins.manifests[pluginId];
+				if (!manifest?.authorUrl) continue;
+
+				const repoPath = manifest.authorUrl.replace('https://github.com/', '');
+
+				// Check for and apply updates
+				await this.pluginManager.addPlugin(repoPath);
+			} catch (error) {
+				console.error(`Error checking updates for ${pluginId}:`, error);
+			}
+		}
 	}
 }

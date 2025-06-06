@@ -23,6 +23,8 @@ export interface JotsSettings {
     journalRootFolder: string;
     journalFolderPattern: string;
     journalFilePattern: string;
+    personalAccessToken?: string; // GitHub personal access token for rate limits
+    updateAtStartup: boolean; // Whether to auto-update plugins at startup
 }
 
 interface DependencyState {
@@ -155,6 +157,19 @@ export class JotsSettingTab extends PluginSettingTab {
         await this.checkDependencies();
 
         containerEl.createEl('h3', { text: 'Plugin Dependencies' });
+
+        // Auto-update setting
+        new Setting(containerEl)
+            .setName('Auto-update plugins at startup')
+            .setDesc('If enabled, installed plugins will be checked for updates each time Obsidian starts')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.updateAtStartup)
+                .onChange(async (value) => {
+                    this.plugin.settings.updateAtStartup = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        containerEl.createEl('hr');
 
         // Add description for required plugins
         containerEl.createEl('p', {
@@ -403,5 +418,7 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     taskLetters: ['A', 'B', 'C'],
     journalRootFolder: 'Journals',
     journalFolderPattern: 'YYYY/YYYY-MM',
-    journalFilePattern: 'YYYY-MM-DD_ddd'
+    journalFilePattern: 'YYYY-MM-DD_ddd',
+    personalAccessToken: '',
+    updateAtStartup: true
 };
