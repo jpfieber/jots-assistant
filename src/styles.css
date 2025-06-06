@@ -4,6 +4,22 @@
     margin-bottom: 12px;
 }
 
+/* Settings gear icon button */
+.setting-item-control button[aria-label*="settings"] {
+    background: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0;
+}
+
+.setting-item-control button[aria-label*="settings"] .svg-icon.lucide-settings {
+    color: var(--text-muted);
+}
+
+.setting-item-control button[aria-label*="settings"]:hover .svg-icon.lucide-settings {
+    color: var(--text-normal);
+}
+
 .jots-settings-tab {
     margin-bottom: -1px;
     padding: 6px 12px;

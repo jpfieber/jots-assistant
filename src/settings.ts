@@ -239,11 +239,19 @@ export class JotsSettingTab extends PluginSettingTab {
                         cls: latestVer && installedVer && latestVer !== installedVer ? 'jots-latest-version' : ''
                     });
                 });
-            }));
-
-            const isInstalled = this.dependencyState[id]?.isInstalled;
+            })); const isInstalled = this.dependencyState[id]?.isInstalled;
             const isLoaded = (this.app as unknown as ExtendedApp).plugins?.plugins[id] !== undefined;
-            const isEnabled = isInstalled && isLoaded;
+            const isEnabled = isInstalled && isLoaded;            // Add settings button if plugin is enabled
+            if (isEnabled) {
+                setting.addButton(btn =>
+                    btn.setIcon('gear')
+                        .setTooltip(`Open ${name} settings`)
+                        .onClick(async () => {
+                            // @ts-ignore - Access internal Obsidian API
+                            await this.app.setting.openTabById(id);
+                        })
+                );
+            }
 
             // Create the main action button (Install/Uninstall)
             setting.addButton(btn => {
@@ -285,6 +293,7 @@ export class JotsSettingTab extends PluginSettingTab {
                 } else {
                     btn.setButtonText('Uninstall')
                         .setDisabled(isEnabled)
+                        .setTooltip('Disable plugin before Uninstalling')
                         .onClick(async () => {
                             btn.setButtonText('Uninstalling...');
                             btn.setDisabled(true);
