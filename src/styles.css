@@ -172,9 +172,16 @@
 }
 
 /* --- Dynamic Content Styling --- */
+/* Target regular content width in readable line width mode */
+.markdown-source-view.mod-cm6.is-readable-line-width .cm-sizer>.jots-dynamic-content-element,
+.markdown-preview-view.is-readable-line-width .jots-dynamic-content-element {
+    max-width: var(--max-width);
+    width: var(--line-width);
+    margin-inline: var(--content-margin);
+}
+
 .jots-dynamic-content-element {
     width: 100%;
-    padding: 0 var(--file-margins);
     margin: 1em 0;
 }
 
@@ -195,10 +202,10 @@
 
 /* Live Preview Adjustments */
 .jots-cm-padding {
-    padding-bottom: 100px !important;
+    padding-bottom: var(--p-spacing) !important;
     /* Space for footer in live preview */
 }
 
 .jots-remove-flex {
-    display: block !important;
+    flex: 0 1 auto !important;
 }
