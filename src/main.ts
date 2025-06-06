@@ -8,6 +8,7 @@ export default class JotsPlugin extends Plugin {
 	settings: JotsSettings;
 	private styleEl: HTMLStyleElement;
 	public pluginManager: PluginManager;
+	public settingTab: JotsSettingTab;
 
 	async onload() {
 		await this.loadSettings();
@@ -27,7 +28,8 @@ export default class JotsPlugin extends Plugin {
 		registerCommands(this);
 
 		// Add settings tab
-		this.addSettingTab(new JotsSettingTab(this.app, this));
+		this.settingTab = new JotsSettingTab(this.app, this);
+		this.addSettingTab(this.settingTab);
 	}
 
 	onunload() {
@@ -47,13 +49,7 @@ export default class JotsPlugin extends Plugin {
 	}
 
 	private updateStyles() {
-		if (this.styleEl) {
-			const css = generateJotsIconCss(
-				this.settings.sectionName,
-				this.settings.sectionIcon,
-				this.settings.labelColor
-			);
-			this.styleEl.textContent = css;
-		}
+		const iconWithColor = this.settings.sectionIcon.replace('"black"', `"${this.settings.labelColor}"`);
+		this.styleEl.textContent = generateJotsIconCss(this.settings.sectionName, iconWithColor, this.settings.labelColor);
 	}
 }

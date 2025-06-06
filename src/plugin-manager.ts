@@ -1,6 +1,19 @@
 import { Notice, PluginManifest, requestUrl } from 'obsidian';
 import JotsPlugin from './main';
 
+// Internal types for Obsidian's plugin API
+interface InternalPlugins {
+    manifests: { [key: string]: PluginManifest };
+    plugins: { [key: string]: Plugin };
+    disablePlugin: (id: string) => Promise<void>;
+    enablePlugin: (id: string) => Promise<void>;
+    loadManifests: () => Promise<void>;
+}
+
+interface ExtendedApp {
+    plugins: InternalPlugins;
+}
+
 interface Release {
     tag_name: string;
     assets: Array<{
@@ -343,17 +356,232 @@ export class PluginManager {
         if (files.styles) {
             await adapter.write(`${pluginDir}styles.css`, files.styles);
         }
-    }
-
-    private async enablePlugin(pluginId: string): Promise<void> {
+    } private async enablePlugin(pluginId: string): Promise<void> {
         try {
-            // @ts-ignore - Access internal plugin API
-            await this.plugin.app.plugins.loadManifest(pluginId);
-            // @ts-ignore - Access internal plugin API
-            await this.plugin.app.plugins.enablePlugin(pluginId);
+            const app = this.plugin.app as unknown as ExtendedApp;
+
+            // First load manifests to ensure we have current state
+            await app.plugins.loadManifests();
+
+            // Enable the plugin
+            await app.plugins.enablePlugin(pluginId);
+
+            // Wait a bit for the enable to take effect
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Force a manifest reload to ensure state is synchronized
+            await app.plugins.loadManifests();
+
+            // Update the UI state if needed
+            if (this.plugin.settingTab) {
+                await this.plugin.settingTab.checkDependencies();
+                if (this.plugin.settingTab.containerEl.isShown()) {
+                    await this.plugin.settingTab.display();
+                }
+            }
         } catch (error) {
             console.error('Error enabling plugin:', error);
             new Notice(`Failed to enable plugin: ${error.message}`);
+            throw error;
+        }
+    } async uninstallPlugin(pluginId: string): Promise<boolean> {
+        try {
+            const app = this.plugin.app;
+            const extApp = app as unknown as ExtendedApp;
+
+            // Get plugin manifest to check if it exists
+            const manifest = extApp.plugins.manifests[pluginId];
+            if (!manifest) {
+                new Notice(`Plugin ${pluginId} not found`);
+                return false;
+            }
+
+            const pluginDir = `${app.vault.configDir}/plugins/${pluginId}/`;
+            const { adapter } = app.vault;
+
+            // First verify the plugin directory exists
+            if (!await adapter.exists(pluginDir)) {
+                new Notice(`Plugin directory not found: ${pluginId}`);
+                return false;
+            }
+
+            // First reload manifests to ensure we have current state
+            await extApp.plugins.loadManifests();
+
+            // Then disable the plugin if it's enabled
+            if (extApp.plugins.plugins[pluginId]) {
+                await extApp.plugins.disablePlugin(pluginId);
+                // Give a longer delay after disabling
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            try {
+                // 1. First remove styles.css since it's optional and won't trigger hot-reload
+                const stylesPath = `${pluginDir}styles.css`;
+                if (await adapter.exists(stylesPath)) {
+                    await adapter.remove(stylesPath);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // 2. Then remove main.js
+                const mainPath = `${pluginDir}main.js`;
+                if (await adapter.exists(mainPath)) {
+                    await adapter.remove(mainPath);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // 3. Then remove manifest.json last
+                const manifestPath = `${pluginDir}manifest.json`;
+                if (await adapter.exists(manifestPath)) {
+                    await adapter.remove(manifestPath);
+                    // Wait a bit longer after manifest removal
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+
+                // 4. Finally remove the directory after all files are gone
+                if (await adapter.exists(pluginDir)) {
+                    await adapter.rmdir(pluginDir, true);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                // Force reload manifests one final time
+                await extApp.plugins.loadManifests();
+
+                // Update the UI state if needed
+                if (this.plugin.settingTab) {
+                    await this.plugin.settingTab.checkDependencies();
+                    if (this.plugin.settingTab.containerEl.isShown()) {
+                        await this.plugin.settingTab.display();
+                    }
+                }
+            } catch (error) {
+                console.error('Error removing plugin files:', error);
+                // If we hit an error, force reload manifests to ensure clean state
+                await extApp.plugins.loadManifests();
+                throw error;
+            }
+
+            new Notice(`Plugin ${manifest.name} has been uninstalled`);
+            return true;
+
+        } catch (error) {
+            console.error('Error uninstalling plugin:', error);
+            new Notice(`Failed to uninstall plugin: ${error.message}`);
+            return false;
+        }
+    }
+
+    async installPlugin(name: string, desc: string, repo: string, pluginId: string): Promise<boolean> {
+        try {
+            const app = this.plugin.app;
+            const pluginDir = `${app.vault.configDir}/plugins/${pluginId}/`;
+            const { adapter } = app.vault;
+
+            // Check if plugin is already installed
+            if (await adapter.exists(pluginDir)) {
+                new Notice(`Plugin ${name} is already installed`);
+                return false;
+            }
+
+            // Create plugin directory if it doesn't exist
+            try {
+                await adapter.mkdir(pluginDir);
+                // Wait a moment for directory creation
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.error('Error creating plugin directory:', error);
+                new Notice(`Failed to create plugin directory: ${error.message}`);
+                return false;
+            }
+
+            // Verify directory was created
+            if (!await adapter.exists(pluginDir)) {
+                new Notice('Failed to create plugin directory');
+                return false;
+            }
+
+            // Download and write manifest first
+            try {
+                const manifestJson = {
+                    id: pluginId,
+                    name: name,
+                    version: "1.0.0",
+                    minAppVersion: "0.15.0",
+                    description: desc,
+                    author: "Virtual Footer",
+                    authorUrl: repo,
+                    isDesktopOnly: false
+                };
+
+                await adapter.write(
+                    `${pluginDir}manifest.json`,
+                    JSON.stringify(manifestJson, null, 2)
+                );
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.error('Error writing manifest:', error);
+                // Clean up directory if manifest write fails
+                await adapter.rmdir(pluginDir, true);
+                throw error;
+            }
+
+            // Download and write main.js
+            try {
+                const mainJsContent = await this.fetchGithubFile(repo, 'main.js');
+                await adapter.write(`${pluginDir}main.js`, mainJsContent);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.error('Error writing main.js:', error);
+                // Clean up directory if main.js write fails
+                await adapter.rmdir(pluginDir, true);
+                throw error;
+            }
+
+            // Download and write styles.css if it exists
+            try {
+                const cssContent = await this.fetchGithubFile(repo, 'styles.css');
+                if (cssContent) {
+                    await adapter.write(`${pluginDir}styles.css`, cssContent);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            } catch (error) {
+                // Don't throw on styles.css error since it's optional
+                console.log('Note: styles.css not found or failed to download');
+            }
+
+            // Verify all required files exist
+            const mainJsExists = await adapter.exists(`${pluginDir}main.js`);
+            const manifestExists = await adapter.exists(`${pluginDir}manifest.json`);
+
+            if (!mainJsExists || !manifestExists) {
+                // Clean up if verification fails
+                await adapter.rmdir(pluginDir, true);
+                new Notice('Failed to verify plugin files after installation');
+                return false;
+            }
+
+            // Force reload manifests
+            await (app as unknown as ExtendedApp).plugins.loadManifests();
+
+            new Notice(`Plugin ${name} has been installed`);
+            return true;
+
+        } catch (error) {
+            console.error('Error installing plugin:', error);
+            new Notice(`Failed to install plugin: ${error.message}`);
+            return false;
+        }
+    }
+
+    private async fetchGithubFile(repo: string, filename: string): Promise<string> {
+        try {
+            const response = await fetch(`${repo}/raw/master/${filename}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${filename}: ${response.statusText}`);
+            }
+            return await response.text();
+        } catch (error) {
+            console.error(`Error fetching ${filename}:`, error);
             throw error;
         }
     }
