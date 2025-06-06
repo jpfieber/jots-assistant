@@ -65,13 +65,35 @@ export class PluginManager {
                 return false;
             }
 
+            // Get current version if plugin is installed
+            const pluginDir = `${this.plugin.app.vault.configDir}/plugins/${manifest.id}/`;
+            const { adapter } = this.plugin.app.vault;
+            let currentVersion: string | null = null;
+
+            if (await adapter.exists(`${pluginDir}manifest.json`)) {
+                try {
+                    const existingManifest = JSON.parse(await adapter.read(`${pluginDir}manifest.json`));
+                    currentVersion = existingManifest.version;
+                } catch (e) {
+                    // Ignore error reading current version
+                }
+            }
+
             // Write files to plugin folder
             await this.writePluginFiles(manifest.id, releaseFiles);
 
             // Enable the plugin by default
             await this.enablePlugin(manifest.id);
 
-            new Notice(`Plugin ${manifest.name} has been installed`);
+            // Show appropriate notification based on version
+            if (currentVersion) {
+                // This is an update
+                console.log(`Updated plugin ${manifest.name} from ${currentVersion} to ${manifest.version}`);
+            } else {
+                // This is a fresh install
+                new Notice(`Plugin ${manifest.name} has been installed`);
+            }
+
             return true;
 
         } catch (error) {
@@ -93,13 +115,14 @@ export class PluginManager {
             // Get the latest release
             const release = await this.getRelease(repositoryPath, headers);
             if (!release) {
-                new Notice('No release found for the repository');
+                // Don't show notification for missing releases during startup checks
                 return null;
             }
 
             // Get manifest from release
             const manifestContent = await this.fetchReleaseFile(release, 'manifest.json', headers);
             if (!manifestContent) {
+                // Only show notification for manifest issues when explicitly installing
                 new Notice('No manifest.json found in release');
                 return null;
             }
@@ -124,13 +147,14 @@ export class PluginManager {
         } catch (error) {
             console.error('Error validating repository:', error);
 
-            // Handle specific error cases
-            if (error.status === 404) {
-                new Notice('Repository or release not found. Check that the repository exists and has releases.');
-            } else if (error.status === 403) {
-                new Notice('GitHub API rate limit exceeded.');
-            } else {
-                new Notice(`Failed to validate repository: ${error.message}`);
+            // Show notifications only for important errors
+            if (error.status === 403) {
+                new Notice(this.plugin.settings.personalAccessToken ?
+                    'GitHub API rate limit exceeded. The personal access token might be invalid.' :
+                    'GitHub API rate limit exceeded. Try adding a personal access token in settings to increase the limit.'
+                );
+            } else if (error.status === 401) {
+                new Notice('Invalid GitHub personal access token. Please check your token in settings.');
             }
 
             return null;
@@ -141,13 +165,17 @@ export class PluginManager {
         repositoryPath: string,
         headers: Record<string, string>
     ): Promise<Release | null> {
-        try {
-            // First check if repo exists
+        try {            // First check if repo exists
             headers = {
                 ...headers,
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'jots-assistant'
             };
+
+            // Add authorization if personal access token exists
+            if (this.plugin.settings.personalAccessToken) {
+                headers.Authorization = `token ${this.plugin.settings.personalAccessToken}`;
+            }
 
             try {
                 await requestUrl({
@@ -156,7 +184,7 @@ export class PluginManager {
                 });
             } catch (error) {
                 if (error.status === 404) {
-                    console.log('Repository not found');
+                    //console.log('Repository not found');
                     return null;
                 }
                 throw error;
@@ -307,13 +335,14 @@ export class PluginManager {
             // Attempt to get all required files
             const mainJs = await this.fetchReleaseFile(release, 'main.js', headers);
             if (!mainJs) {
-                new Notice('Required main.js file not found in release');
+                // Only show error for missing main.js during explicit install
+                console.error('Required main.js file not found in release');
                 return null;
             }
 
             const manifestFile = await this.fetchReleaseFile(release, 'manifest.json', headers);
             if (!manifestFile) {
-                new Notice('Required manifest.json file not found in release');
+                console.error('Required manifest.json file not found in release');
                 return null;
             }
 
@@ -328,7 +357,10 @@ export class PluginManager {
 
         } catch (error) {
             console.error('Error getting release files:', error);
-            new Notice(`Failed to get release files: ${error.message}`);
+            // Only show notification for explicit errors, not routine checks
+            if (error.status === 403 || error.status === 401) {
+                new Notice(`Failed to get release files: ${error.message}`);
+            }
             return null;
         }
     }

@@ -443,9 +443,7 @@ export class JotsSettingTab extends PluginSettingTab {
             }
         });
         return properties;
-    }
-
-    private getAvailableMarkdownFilePaths(): Set<string> {
+    } private getAvailableMarkdownFilePaths(): Set<string> {
         const paths = new Set<string>();
         this.plugin.app.vault.getMarkdownFiles().forEach(file => {
             paths.add(file.path);
@@ -679,8 +677,7 @@ export class JotsSettingTab extends PluginSettingTab {
 
         new Setting(ruleContent)
             .setName('Content source')
-            .setDesc('Where to get the content from')
-            .addDropdown(dropdown => dropdown
+            .setDesc('Where to get the content from').addDropdown(dropdown => dropdown
                 .addOption(ContentSource.Text, 'Direct text')
                 .addOption(ContentSource.File, 'Markdown file')
                 .setValue(rule.contentSource)
@@ -688,31 +685,28 @@ export class JotsSettingTab extends PluginSettingTab {
                     rule.contentSource = value as ContentSource;
                     await this.plugin.saveSettings();
                     this.display();
-                }));
-
-        if (rule.contentSource === ContentSource.File) {
-            new Setting(ruleContent)
-                .setName('Content file')
-                .setDesc('The markdown file to use as content')
-                .addText(text => {
-                    text.setPlaceholder('e.g., templates/footer.md')
-                        .setValue(rule.footerFilePath || '')
-                        .onChange(async (value) => {
-                            rule.footerFilePath = value;
-                            await this.plugin.saveSettings({ refreshType: 'content' });
+                })); if (rule.contentSource === ContentSource.File) {
+                    new Setting(ruleContent)
+                        .setName('Content file')
+                        .setDesc('The markdown file to use as content')
+                        .addText(text => {
+                            text.setPlaceholder('e.g., templates/footer.md')
+                                .setValue(rule.footerFilePath || '')
+                                .onChange(async (value) => {
+                                    rule.footerFilePath = value;
+                                    await this.plugin.saveSettings({ refreshType: 'content' });
+                                }); new MultiSuggest(
+                                    text.inputEl,
+                                    this.getAvailableMarkdownFilePaths(),
+                                    async (value) => {
+                                        rule.footerFilePath = value;
+                                        text.setValue(value);
+                                        await this.plugin.saveSettings();
+                                    },
+                                    this.plugin.app
+                                );
                         });
-                    new MultiSuggest(
-                        text.inputEl,
-                        this.getAvailableMarkdownFilePaths(),
-                        async (value) => {
-                            rule.footerFilePath = value;
-                            text.setValue(value);
-                            await this.plugin.saveSettings();
-                        },
-                        this.plugin.app
-                    );
-                });
-        } else {
+                } else {
             new Setting(ruleContent)
                 .setName('Content')
                 .setDesc('The markdown content to insert')
@@ -804,7 +798,7 @@ export enum RuleType {
 
 export enum ContentSource {
     Text = 'text',
-    File = 'file',
+    File = 'file'
 }
 
 export enum RenderLocation {

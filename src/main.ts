@@ -1,5 +1,6 @@
 import {
 	App,
+	Notice,  // Add Notice import
 	Plugin,
 	MarkdownView,
 	Component,
@@ -7,7 +8,7 @@ import {
 	TFile,
 	getAllTags
 } from 'obsidian';
-import { JotsSettings, DEFAULT_SETTINGS, JotsSettingTab, Rule, RuleType, RenderLocation } from './settings';
+import { JotsSettings, DEFAULT_SETTINGS, JotsSettingTab, Rule, RuleType, RenderLocation, ContentSource } from './settings';
 import { registerCommands } from './commands';
 import { generateJotsIconCss } from './utils';
 import { PluginManager } from './plugin-manager';
@@ -43,6 +44,7 @@ export default class JotsPlugin extends Plugin {
 	private initialLayoutReadyProcessed = false;
 
 	async onload() {
+		console.log('JOTS Assistant: Loading Plugin...');
 		await this.loadSettings();
 
 		// Initialize plugin manager
@@ -95,6 +97,7 @@ export default class JotsPlugin extends Plugin {
 	}
 
 	onunload() {
+		console.log('JOTS Assistant: Unloading Plugin...');
 		// Clean up the injected styles
 		if (this.styleEl && this.styleEl.parentNode) {
 			this.styleEl.parentNode.removeChild(this.styleEl);
@@ -167,8 +170,11 @@ export default class JotsPlugin extends Plugin {
 
 				const repoPath = manifest.authorUrl.replace('https://github.com/', '');
 
-				// Check for and apply updates
-				await this.pluginManager.addPlugin(repoPath);
+				// Check for updates but only show notice if update is found
+				const result = await this.pluginManager.addPlugin(repoPath);
+				if (result) {
+					new Notice(`Plugin ${manifest.name} has been updated to the latest version`);
+				}
 			} catch (error) {
 				console.error(`Error checking updates for ${pluginId}:`, error);
 			}
@@ -505,11 +511,8 @@ export default class JotsPlugin extends Plugin {
 						}
 					}
 					break;
-			}
-
-			if (isMatch) {
-				let contentText: string;
-				if (rule.contentSource === 'text') {
+			}			if (isMatch) {
+				let contentText: string; if (rule.contentSource === ContentSource.Text) {
 					contentText = rule.footerText;
 				} else {
 					const contentFile = rule.footerFilePath ?
