@@ -86,7 +86,7 @@ export class AddJotsCommand implements Command {
 
         // Order the groups according to settings order
         const orderedNonTimesTasks: TaskWithTime[] = [];
-        this.plugin.settings.taskLetters.forEach(letter => {
+        this.plugin.settings.taskLetters.forEach((letter: string) => {
             if (tasksByLetter[letter]) {
                 orderedNonTimesTasks.push(...tasksByLetter[letter]);
             }

@@ -497,8 +497,7 @@ export default class JotsPlugin extends Plugin {
 		const file: TFile = abstractFile;
 		let fileTags: string[] | null = null;
 		const fileCache = this.app.metadataCache.getFileCache(file);
-
-		const hasEnabledTagRule = this.settings.rules.some(r => r.enabled && r.type === RuleType.Tag);
+		const hasEnabledTagRule = this.settings.rules.some((r: Rule) => r.enabled && r.type === RuleType.Tag);
 		if (hasEnabledTagRule && fileCache) {
 			const allTagsInFileWithHash = getAllTags(fileCache);
 			fileTags = allTagsInFileWithHash ? allTagsInFileWithHash.map(tag => tag.substring(1)) : [];
