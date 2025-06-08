@@ -13,12 +13,25 @@ import { PluginManager } from './plugin-manager';
 import { ContentRenderer } from './core/ContentRenderer';
 import { ViewEventManager } from './core/ViewEventManager';
 import { RuleProcessor } from './core/RuleProcessor';
+import { JotsApi } from './api/JotsApi';
 
 interface HTMLElementWithComponent extends HTMLElement {
 	component?: Component;
 }
 
+/**
+ * The global namespace for the JOTS Assistant plugin API
+ */
+declare global {
+	interface Window {
+		JotsAssistant?: {
+			api: JotsApi;
+		};
+	}
+}
+
 export default class JotsPlugin extends Plugin {
+	api: JotsApi;
 	settings: JotsSettings;
 	private styleEl: HTMLStyleElement;
 	private ruleProcessor: RuleProcessor;
@@ -37,6 +50,16 @@ export default class JotsPlugin extends Plugin {
 		this.pluginManager = new PluginManager(this);
 		this.ruleProcessor = new RuleProcessor(this.settings);
 		this.viewManager = new ViewEventManager();
+		// Initialize and expose the API
+		this.api = new JotsApi(this);
+		console.debug('JOTS Assistant: Initializing API', this.api);
+		window.JotsAssistant = {
+			api: this.api
+		};
+		console.debug('JOTS Assistant: API exposed on window object:', {
+			api: window.JotsAssistant?.api,
+			fullObject: window.JotsAssistant
+		});
 
 		// Create and inject the style element for dynamic styles
 		this.styleEl = document.createElement('style');
@@ -83,13 +106,15 @@ export default class JotsPlugin extends Plugin {
 			}
 		});
 	}
-
 	onunload() {
 		console.log('JOTS Assistant: Unloading Plugin...');
 		// Clean up the injected styles
 		if (this.styleEl && this.styleEl.parentNode) {
 			this.styleEl.parentNode.removeChild(this.styleEl);
 		}
+
+		// Clean up API
+		delete window.JotsAssistant;
 
 		// Clean up view manager
 		this.viewManager.cleanup();
@@ -108,6 +133,8 @@ export default class JotsPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.ruleProcessor = new RuleProcessor(this.settings);
+		this.viewManager = new ViewEventManager();
 	}
 
 	async saveSettings(options: { refreshViews?: boolean, refreshType?: 'all' | 'styles' | 'content' } = {}) {
@@ -192,7 +219,7 @@ export default class JotsPlugin extends Plugin {
 		for (const rule of applicableRules) {
 			const header = this.ruleProcessor.getRuleContent(rule, 'header');
 			const footer = this.ruleProcessor.getRuleContent(rule, 'footer');
-			
+
 			if (header) headerContent += header + "\n\n";
 			if (footer) footerContent += footer + "\n\n";
 		}

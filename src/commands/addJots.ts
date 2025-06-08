@@ -14,6 +14,11 @@ interface JotsSection {
     items: TaskWithTime[];
 }
 
+export async function addJotsToJournal(plugin: JotsPlugin, file: TFile): Promise<boolean> {
+    const command = new AddJotsCommand(plugin);
+    return command.processFile(file);
+}
+
 export class AddJotsCommand implements Command {
     id = 'add-jots-to-journals';
     name = 'Add JOTS to Journals';
