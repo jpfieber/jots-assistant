@@ -12,6 +12,15 @@ declare global {
 }
 
 /**
+ * Journal path information returned by getJournalPathInfo
+ */
+export interface JournalPathInfo {
+    rootFolder: string;
+    folderPattern: string;
+    filePattern: string;
+}
+
+/**
  * Public API for other plugins to interact with JOTS Assistant
  */
 export class JotsApi {
@@ -65,6 +74,18 @@ export class JotsApi {
 
         console.debug('JOTS Assistant API: Processing journal file...');
         await addJotsToJournal(this.plugin, journalFile);
+    }
+
+    /**
+     * Get journal path information for finding journal files
+     * @returns Object containing journal path settings
+     */
+    getJournalPathInfo(): JournalPathInfo {
+        return {
+            rootFolder: this.plugin.settings.journalRootFolder,
+            folderPattern: this.plugin.settings.journalFolderPattern,
+            filePattern: this.plugin.settings.journalFilePattern
+        };
     }
 
     /**
