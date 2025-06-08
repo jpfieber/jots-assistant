@@ -223,38 +223,74 @@
 }
 
 /* --- Dynamic Content Styling --- */
-/* Target regular content width in readable line width mode */
-.markdown-source-view.mod-cm6.is-readable-line-width .cm-sizer>.jots-dynamic-content-element,
-.markdown-preview-view.is-readable-line-width .jots-dynamic-content-element {
-    max-width: var(--max-width);
-    width: var(--line-width);
-    margin-inline: var(--content-margin);
-}
 
+/* Base styles for dynamic content in all modes */
 .jots-dynamic-content-element {
     width: 100%;
-    margin: 1em 0;
+    box-sizing: border-box;
 }
 
-.jots-header-group {
-    border-bottom: 1px solid var(--divider-color);
-    margin-bottom: 2em;
+/* Reading mode styles */
+.markdown-reading-view .markdown-preview-view {
+    position: relative;
 }
 
-.jots-footer-group {
-    border-top: 1px solid var(--divider-color);
-    margin-top: 2em;
+.markdown-reading-view .markdown-preview-view .mod-header,
+.markdown-reading-view .markdown-preview-view .mod-footer {
+    width: 100%;
+    max-width: var(--file-line-width);
+    margin: 0 auto;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-.jots-header-rendered-content,
-.jots-footer-rendered-content {
+.markdown-reading-view .markdown-preview-view .mod-header .jots-dynamic-content-element,
+.markdown-reading-view .markdown-preview-view .mod-footer .jots-dynamic-content-element {
+    width: 100%;
+    margin: 0 auto;
+    padding: 1em var(--file-margins);
+}
+
+/* Source/Live Preview mode styles */
+.markdown-source-view.mod-cm6 .jots-header-container,
+.markdown-source-view.mod-cm6 .jots-footer-container {
+    width: 100%;
+    max-width: var(--file-line-width);
+    margin: 0 auto;
+    padding: 0 var(--file-margins);
+}
+
+.markdown-source-view.mod-cm6.is-readable-line-width .jots-header-container,
+.markdown-source-view.mod-cm6.is-readable-line-width .jots-footer-container {
+    width: var(--line-width);
+}
+
+/* Style wrapper div that MarkdownRenderer creates */
+.jots-header-container>div,
+.jots-footer-container>div {
+    margin: 0;
     padding: 1em 0;
+}
+
+/* Remove extra margins */
+.jots-header-container>div>*:first-child,
+.jots-footer-container>div>*:first-child {
+    margin-top: 0;
+}
+
+.jots-header-container>div>*:last-child,
+.jots-footer-container>div>*:last-child {
+    margin-bottom: 0;
+}
+
+/* Fix layout in source mode */
+.markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex {
+    display: block;
 }
 
 /* Live Preview Adjustments */
 .jots-cm-padding {
     padding-bottom: var(--p-spacing) !important;
-    /* Space for footer in live preview */
 }
 
 .jots-remove-flex {
