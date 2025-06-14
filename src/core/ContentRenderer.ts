@@ -1,4 +1,4 @@
-import { MarkdownRenderer, WorkspaceLeaf, MarkdownView } from 'obsidian';
+import { MarkdownRenderer, WorkspaceLeaf, MarkdownView, App } from 'obsidian';
 import {
     CSS_DYNAMIC_CONTENT_ELEMENT,
     CSS_HEADER_GROUP_ELEMENT,
@@ -14,9 +14,9 @@ import {
 
 export class ContentRenderer {
     constructor(
-        private plugin: any,  // Replace with proper plugin type
+        private plugin: { app: App },
         private leaf: WorkspaceLeaf
-    ) {}
+    ) { }
 
     async createHeaderContent(content: string): Promise<HTMLElement> {
         const headerGroup = this.createContentGroup(CSS_HEADER_GROUP_ELEMENT);
@@ -38,17 +38,31 @@ export class ContentRenderer {
         const group = document.createElement('div');
         group.classList.add(CSS_DYNAMIC_CONTENT_ELEMENT, className);
         return group;
-    }
-
-    private async renderMarkdown(content: string): Promise<HTMLElement> {
+    } private async renderMarkdown(content: string): Promise<HTMLElement> {
         const container = document.createElement('div');
         const view = this.leaf.view as MarkdownView;
         await MarkdownRenderer.renderMarkdown(
             content,
             container,
             view.file?.path || '',
-            this.plugin
+            view
         );
+
+        // Add click handlers for internal links
+        container.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement;
+            if (target.matches('a.internal-link')) {
+                event.preventDefault();
+                const href = target.getAttribute('href');
+                if (href) {
+                    this.plugin.app.workspace.openLinkText(
+                        decodeURIComponent(href),
+                        view.file?.path || ''
+                    );
+                }
+            }
+        });
+
         return container;
     }
 
@@ -65,7 +79,7 @@ export class ContentRenderer {
 
     private injectPreviewContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
         const container = this.leaf.view.containerEl;
-        
+
         if (headerContent) {
             const headerArea = container.querySelector(SELECTOR_PREVIEW_HEADER_AREA);
             if (headerArea) {
@@ -85,7 +99,7 @@ export class ContentRenderer {
         const view = this.leaf.view as MarkdownView;
         const editor = view.editor;
         const container = this.leaf.view.containerEl;
-        
+
         const cmContent = container.querySelector('.cm-content');
         if (!cmContent) return;
 
