@@ -24,13 +24,10 @@ jobs:
           npm install
 
       - name: Build plugin
-        run: npm run build
-
-      - name: Copy files to root
         run: |
-          cp dist/main.js .
-          mkdir -p assets
-          cp -r dist/assets/* assets/
+          npm run build
+          mkdir ${{ github.workspace }}/release
+          cp dist/main.js manifest.json src/styles.css ${{ github.workspace }}/release/
 
       - name: Create release
         env:
@@ -41,4 +38,4 @@ jobs:
           gh release create "$tag" \
             --title="$tag" \
             --draft \
-            main.js manifest.json assets/*
+            ${{ github.workspace }}/release/*
