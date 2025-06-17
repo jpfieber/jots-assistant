@@ -72,27 +72,17 @@ export default class JotsPlugin extends Plugin {
 		// Check for plugin updates if enabled
 		if (this.settings.updateAtStartup) {
 			this.checkForUpdates();
-		}
-
-		// Register commands
+		}		// Register commands
 		registerCommands(this);
 
 		// Add settings tab
 		this.settingTab = new JotsSettingTab(this.app, this);
 		this.addSettingTab(this.settingTab);
-
-		// Register events for dynamic content
+		// Register event for initial file load only
 		this.registerEvent(
-			this.app.workspace.on('file-open', () => {
-				if (this.settings.refreshOnFileOpen && this.initialLayoutReadyProcessed) {
-					this.handleActiveViewChange();
-				}
-			})
-		);
-
-		this.registerEvent(
-			this.app.workspace.on('layout-change', () => {
-				if (this.initialLayoutReadyProcessed) {
+			this.app.workspace.on('file-open', (file) => {
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view && (!this.contentRenderers.has(view) || !this.contentRenderers.get(view))) {
 					this.handleActiveViewChange();
 				}
 			})
@@ -154,8 +144,7 @@ export default class JotsPlugin extends Plugin {
 			await this.refreshAllViews();
 		}
 	}
-
-	private async refreshAllViews(): Promise<void> {
+	async refreshAllViews(): Promise<void> {
 		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
 			if (leaf.view instanceof MarkdownView) {
 				this._processView(leaf.view);
