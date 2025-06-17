@@ -15,6 +15,11 @@ export const JOTS_PLUGINS = [
         repo: 'jpfieber/jots-sleep-tracker',
         name: "Sleep Tracker",
         description: 'Monitor Your Sleep, Master Your Day!'
+    },
+    {
+        repo: 'jpfieber/jots-food-tracker',
+        name: 'Food Tracker',
+        description: 'Track Your Nutrition Journey'
     }
 ];
 

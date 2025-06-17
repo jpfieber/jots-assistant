@@ -1,6 +1,6 @@
 {
   "name": "jots-assistant",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "An Obsidian plugin",
   "main": "dist/main.js",
   "scripts": {
