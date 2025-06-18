@@ -57,28 +57,22 @@ export class AppearanceSection {
                     await this.plugin.saveSettings();
                 }));
 
-        new Setting(containerEl)
-            .setName('Task Letters')
+        new Setting(containerEl).setName('Task Letters')
             .setDesc('Letters to look for in custom tasks (comma-separated, e.g. "A,B,C"). The JOTS header will only be added to notes containing tasks with these letters. Case-insensitive.')
             .addText(text => text
                 .setPlaceholder('A,B,C')
                 .setValue(this.plugin.settings.taskLetters.join(','))
                 .onChange(async (value) => {
-                    // Split by comma, trim whitespace, filter empty strings, and convert to uppercase
-                    const letters = value.split(',')
-                        .map(letter => letter.trim().toUpperCase())
-                        .filter(letter => letter.length > 0);
+                    // Let users type what they want, we'll normalize when saving
+                    let normalized = value.toUpperCase();
 
-                    // Validate that each entry is a single letter
-                    const validLetters = letters.filter(letter => /^[A-Z]$/.test(letter));
+                    // Store the actual valid task letters (single letters A-Z)
+                    const validLetters = normalized.split(',')
+                        .map(letter => letter.trim())
+                        .filter(letter => /^[A-Z]$/.test(letter));
 
+                    // Only save valid letters to settings
                     this.plugin.settings.taskLetters = validLetters;
-
-                    // Show the normalized version (uppercase) to the user
-                    if (validLetters.length !== letters.length) {
-                        text.setValue(validLetters.join(','));
-                    }
-
                     await this.plugin.saveSettings({ refreshType: 'content' });
                 }));
     }

@@ -4,7 +4,8 @@ import {
 	Plugin,
 	MarkdownView,
 	Component,
-	TFile
+	TFile,
+	WorkspaceLeaf
 } from 'obsidian';
 import { JotsSettings, DEFAULT_SETTINGS, JotsSettingTab } from './settings';
 import { registerCommands } from './commands';
@@ -77,13 +78,31 @@ export default class JotsPlugin extends Plugin {
 
 		// Add settings tab
 		this.settingTab = new JotsSettingTab(this.app, this);
-		this.addSettingTab(this.settingTab);
-		// Register event for initial file load only
+		this.addSettingTab(this.settingTab);		// Track current file for each leaf to detect actual file changes
+		const leafFiles = new WeakMap<WorkspaceLeaf, string>();
+
+		// Register event to refresh headers/footers when a file is opened or a tab's content changes
 		this.registerEvent(
 			this.app.workspace.on('file-open', (file) => {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (view && (!this.contentRenderers.has(view) || !this.contentRenderers.get(view))) {
+				if (!view || !file) return;
+
+				const leaf = view.leaf;
+				const currentFilePath = file.path;
+				const previousFilePath = leafFiles.get(leaf);
+
+				// Only refresh if this leaf is showing a different file than before
+				if (currentFilePath !== previousFilePath) {
+					// Clean up old renderer if it exists
+					const oldRenderer = this.contentRenderers.get(view);
+					if (oldRenderer) {
+						oldRenderer.cleanup();
+						this.contentRenderers.delete(view);
+					}
 					this.handleActiveViewChange();
+
+					// Update tracked file for this leaf
+					leafFiles.set(leaf, currentFilePath);
 				}
 			})
 		);
