@@ -296,3 +296,10 @@
 .jots-remove-flex {
     flex: 0 1 auto !important;
 }
+
+/* --- Core Overrides --- */
+
+/* Hide empty tag links that appear before actual tags */
+a.tag:empty {
+    display: none !important;
+}
