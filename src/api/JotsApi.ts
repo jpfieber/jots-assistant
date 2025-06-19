@@ -95,4 +95,11 @@ export class JotsApi {
     getSettings() {
         return this.plugin.settings;
     }
+
+    /**
+     * Refresh all headers and footers in the workspace
+     */
+    refreshHeadersAndFooters(): void {
+        this.plugin.refreshAllViews();
+    }
 }

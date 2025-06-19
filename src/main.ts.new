@@ -1,0 +1,293 @@
+import {
+	App,
+	Notice,
+	Plugin,
+	MarkdownView,
+	Component,
+	TFile,
+	WorkspaceLeaf
+} from 'obsidian';
+import { JotsSettings, DEFAULT_SETTINGS, JotsSettingTab } from './settings';
+import { registerCommands } from './commands';
+import { generateJotsIconCss } from './utils';
+import { PluginManager } from './plugin-manager';
+import { ContentRenderer } from './core/ContentRenderer';
+import { RuleProcessor } from './core/RuleProcessor';
+import { JotsApi } from './api/JotsApi';
+
+const FILE_UPDATE_DEBOUNCE = 1000; // ms - longer debounce to avoid updates while typing
+const DEBUG = true;
+
+interface HTMLElementWithComponent extends HTMLElement {
+	component?: Component;
+}
+
+declare global {
+	interface Window {
+		JotsAssistant?: {
+			api: JotsApi;
+		};
+	}
+}
+
+export default class JotsPlugin extends Plugin {
+	api: JotsApi;
+	settings: JotsSettings;
+	private styleEl: HTMLStyleElement;
+	private ruleProcessor: RuleProcessor;
+	public pluginManager: PluginManager;
+	public settingTab: JotsSettingTab;
+	private contentRenderers: WeakMap<MarkdownView, ContentRenderer> = new WeakMap();
+	private fileStates: Map<string, { path: string; mode: string; lastUpdate: number }> = new Map();
+	private initialLayoutReadyProcessed = false;
+
+	async onload() {
+		console.log('JOTS Assistant: Loading Plugin...');
+		await this.loadSettings();
+
+		// Initialize managers and processors
+		this.pluginManager = new PluginManager(this);
+		this.ruleProcessor = new RuleProcessor(this.settings);
+
+		// Initialize and expose the API
+		this.api = new JotsApi(this);
+		console.debug('JOTS Assistant: Initializing API', this.api);
+		window.JotsAssistant = {
+			api: this.api
+		};
+		console.debug('JOTS Assistant: API exposed on window object:', {
+			api: window.JotsAssistant?.api,
+			fullObject: window.JotsAssistant
+		});
+
+		// Create and inject the style element for dynamic styles
+		this.styleEl = document.createElement('style');
+		this.styleEl.setAttribute('type', 'text/css');
+		document.head.appendChild(this.styleEl);
+
+		// Set initial dynamic styles
+		this.updateStyles();
+
+		// Check for plugin updates if enabled
+		if (this.settings.updateAtStartup) {
+			this.checkForUpdates();
+		}
+		
+		// Register commands
+		registerCommands(this);
+
+		// Add settings tab
+		this.settingTab = new JotsSettingTab(this.app, this);
+		this.addSettingTab(this.settingTab);
+
+		// Register event to refresh headers/footers only on actual file changes
+		this.registerEvent(
+			this.app.workspace.on('file-open', (file) => {
+				if (!file) return;
+
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view) return;
+
+				const currentState = this.fileStates.get(file.path);
+				const now = Date.now();
+
+				// Only process if:
+				// 1. We haven't seen this file before
+				// 2. It's been long enough since the last update
+				if (!currentState || (now - currentState.lastUpdate > FILE_UPDATE_DEBOUNCE)) {
+					if (DEBUG) console.log('JOTS: File open event for', file.path);
+					this._processView(view);
+					this.fileStates.set(file.path, {
+						path: file.path,
+						mode: view.getMode(),
+						lastUpdate: now
+					});
+				} else if (DEBUG) {
+					console.log('JOTS: Skipping file open, too soon since last update');
+				}
+			})
+		);
+
+		// Only handle actual mode changes
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view?.file) return;
+
+				const currentState = this.fileStates.get(view.file.path);
+				const currentMode = view.getMode();
+
+				// Only process if mode has changed
+				if (!currentState || currentState.mode !== currentMode) {
+					if (DEBUG) console.log('JOTS: Mode change event for', view.file.path, currentMode);
+					
+					const renderer = this.contentRenderers.get(view);
+					if (renderer) {
+						// If we have a renderer, just re-inject the existing content
+						const headerContent = renderer.getLastHeaderContent();
+						const footerContent = renderer.getLastFooterContent();
+						if (headerContent || footerContent) {
+							renderer.injectContent(headerContent, footerContent);
+						}
+					}
+
+					// Update state with new mode
+					this.fileStates.set(view.file.path, {
+						path: view.file.path,
+						mode: currentMode,
+						lastUpdate: Date.now()
+					});
+				} else if (DEBUG) {
+					console.log('JOTS: Skipping mode change, no actual change');
+				}
+			})
+		);
+
+		// Process initial view once layout is ready
+		this.app.workspace.onLayoutReady(() => {
+			if (!this.initialLayoutReadyProcessed) {
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view?.file) {
+					this._processView(view);
+					this.fileStates.set(view.file.path, {
+						path: view.file.path,
+						mode: view.getMode(),
+						lastUpdate: Date.now()
+					});
+				}
+				this.initialLayoutReadyProcessed = true;
+			}
+		});
+	}
+
+	onunload() {
+		console.log('JOTS Assistant: Unloading Plugin...');
+		// Clean up the injected styles
+		if (this.styleEl && this.styleEl.parentNode) {
+			this.styleEl.parentNode.removeChild(this.styleEl);
+		}
+
+		// Clean up API
+		delete window.JotsAssistant;
+
+		// Clean up content renderers
+		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+			if (leaf.view instanceof MarkdownView) {
+				const renderer = this.contentRenderers.get(leaf.view);
+				if (renderer) {
+					renderer.cleanup();
+					this.contentRenderers.delete(leaf.view);
+				}
+			}
+		});
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.ruleProcessor = new RuleProcessor(this.settings);
+	}
+
+	async saveSettings(options: { refreshViews?: boolean, refreshType?: 'all' | 'styles' | 'content' } = {}) {
+		const { refreshViews = true, refreshType = 'all' } = options;
+		await this.saveData(this.settings);
+
+		// Update rule processor with new settings
+		this.ruleProcessor = new RuleProcessor(this.settings);
+
+		if (!refreshViews) return;
+
+		if (refreshType === 'all' || refreshType === 'styles') {
+			this.updateStyles();
+		}
+
+		if (refreshType === 'all' || refreshType === 'content') {
+			await this.refreshAllViews();
+		}
+	}
+
+	async refreshAllViews(): Promise<void> {
+		this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+			if (leaf.view instanceof MarkdownView) {
+				this._processView(leaf.view);
+			}
+		});
+	}
+
+	private updateStyles() {
+		const iconWithColor = this.settings.sectionIcon.replace('"black"', `"${this.settings.labelColor}"`);
+		this.styleEl.textContent = generateJotsIconCss(this.settings.sectionName, iconWithColor, this.settings.labelColor);
+	}
+
+	async checkForUpdates() {
+		const app = this.app as any;
+		const plugins = app.plugins;
+		const pluginDir = `${app.vault.configDir}/plugins/`;
+		const { adapter } = app.vault;
+		const managedPlugins = ['dataview', 'virtual-footer'];
+
+		for (const pluginId of managedPlugins) {
+			const pluginPath = `${pluginDir}${pluginId}/`;
+			if (!await adapter.exists(pluginPath)) continue;
+
+			try {
+				const manifest = plugins.manifests[pluginId];
+				if (!manifest?.authorUrl) continue;
+
+				const repoPath = manifest.authorUrl.replace('https://github.com/', '');
+				const result = await this.pluginManager.addPlugin(repoPath);
+				if (result) {
+					new Notice(`Plugin ${manifest.name} has been updated to the latest version`);
+				}
+			} catch (error) {
+				console.error(`Error checking updates for ${pluginId}:`, error);
+			}
+		}
+	}
+
+	private async _processView(view: MarkdownView | null): Promise<void> {
+		if (!view || !view.file) return;
+		if (DEBUG) console.log('JOTS: Processing view for file', view.file.path);
+
+		// Get applicable rules
+		const applicableRules = this.ruleProcessor.getApplicableRules(view.file);
+		
+		// If there are no rules, clean up any existing renderer and return
+		if (applicableRules.length === 0) {
+			if (DEBUG) console.log('JOTS: No applicable rules for', view.file.path);
+			const oldRenderer = this.contentRenderers.get(view);
+			if (oldRenderer) {
+				oldRenderer.cleanup();
+				this.contentRenderers.delete(view);
+			}
+			return;
+		}
+
+		// Generate content strings
+		let headerContent = "";
+		let footerContent = "";
+
+		for (const rule of applicableRules) {
+			const header = this.ruleProcessor.getRuleContent(rule, 'header');
+			const footer = this.ruleProcessor.getRuleContent(rule, 'footer');
+
+			if (header) headerContent += header + "\n\n";
+			if (footer) footerContent += footer + "\n\n";
+		}
+
+		// Get existing renderer or create new one
+		const existingRenderer = this.contentRenderers.get(view);
+		const renderer = existingRenderer || new ContentRenderer(this, view.leaf);
+		
+		if (!existingRenderer) {
+			if (DEBUG) console.log('JOTS: Creating new renderer for', view.file.path);
+			this.contentRenderers.set(view, renderer);
+		}
+
+		// Create and inject content
+		const headerElement = headerContent ? await renderer.createHeaderContent(headerContent.trim()) : null;
+		const footerElement = footerContent ? await renderer.createFooterContent(footerContent.trim()) : null;
+
+		if (DEBUG) console.log('JOTS: Injecting content for', view.file.path);
+		renderer.injectContent(headerElement, footerElement);
+	}
+}
