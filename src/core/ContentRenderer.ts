@@ -64,26 +64,31 @@ export class ContentRenderer {
         });
 
         return container;
-    }
-
-    injectContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
+    } injectContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
         const view = this.leaf.view as MarkdownView;
         const isPreviewMode = view.getMode() === 'preview';
+
+        console.debug('JOTS Assistant: Injecting content -',
+            'Mode:', isPreviewMode ? 'preview' : 'source',
+            'Header:', !!headerContent,
+            'Footer:', !!footerContent
+        );
 
         if (isPreviewMode) {
             this.injectPreviewContent(headerContent, footerContent);
         } else {
             this.injectSourceContent(headerContent, footerContent);
         }
-    }
-
-    private injectPreviewContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
+    } private injectPreviewContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
         const container = this.leaf.view.containerEl;
 
         if (headerContent) {
             const headerArea = container.querySelector(SELECTOR_PREVIEW_HEADER_AREA);
             if (headerArea) {
                 headerArea.appendChild(headerContent);
+                console.debug('JOTS Assistant: Header injected in preview mode');
+            } else {
+                console.debug('JOTS Assistant: Preview header area not found');
             }
         }
 
@@ -91,20 +96,27 @@ export class ContentRenderer {
             const footerArea = container.querySelector(SELECTOR_PREVIEW_FOOTER_AREA);
             if (footerArea) {
                 footerArea.appendChild(footerContent);
+                console.debug('JOTS Assistant: Footer injected in preview mode');
+            } else {
+                console.debug('JOTS Assistant: Preview footer area not found');
             }
         }
-    }
-
-    private injectSourceContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
+    } private injectSourceContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
         const view = this.leaf.view as MarkdownView;
         const editor = view.editor;
         const container = this.leaf.view.containerEl;
 
         const cmContent = container.querySelector('.cm-content');
-        if (!cmContent) return;
+        if (!cmContent) {
+            console.debug('JOTS Assistant: No .cm-content found for source mode injection');
+            return;
+        }
 
         const cmSizer = cmContent.parentElement;
-        if (!cmSizer) return;
+        if (!cmSizer) {
+            console.debug('JOTS Assistant: No cm-sizer found for source mode injection');
+            return;
+        }
 
         // Clean up any existing containers first
         this.cleanup();
@@ -115,6 +127,7 @@ export class ContentRenderer {
             headerContainer.className = CSS_HEADER_CONTAINER;
             headerContainer.appendChild(headerContent);
             cmSizer.insertBefore(headerContainer, cmContent);
+            console.debug('JOTS Assistant: Header injected in source mode');
         }
 
         // Create and inject footer if needed
@@ -123,6 +136,7 @@ export class ContentRenderer {
             footerContainer.className = CSS_FOOTER_CONTAINER;
             footerContainer.appendChild(footerContent);
             cmSizer.appendChild(footerContainer);
+            console.debug('JOTS Assistant: Footer injected in source mode');
         }
 
         // Adjust container styles for proper layout
@@ -130,15 +144,15 @@ export class ContentRenderer {
         if (cmContentContainer) {
             cmContentContainer.classList.add(CSS_REMOVE_FLEX);
         }
-    }
-
-    cleanup(): void {
+    } cleanup(): void {
+        console.debug('JOTS Assistant: ContentRenderer cleanup called');
         const container = this.leaf.view.containerEl;
 
-        // Remove any existing headers/footers
+        // Remove any existing headers/footers - be more thorough
         const elements = container.querySelectorAll(
-            `.${CSS_HEADER_CONTAINER}, .${CSS_FOOTER_CONTAINER}`
+            `.${CSS_HEADER_CONTAINER}, .${CSS_FOOTER_CONTAINER}, .${CSS_DYNAMIC_CONTENT_ELEMENT}`
         );
+        console.debug('JOTS Assistant: Removing', elements.length, 'content elements');
         elements.forEach(el => el.remove());
 
         // Clean up styling

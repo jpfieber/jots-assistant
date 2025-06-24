@@ -80,6 +80,7 @@ export default class JotsPlugin extends Plugin {
 		this.settingTab = new JotsSettingTab(this.app, this);
 		this.addSettingTab(this.settingTab);		// Track current file for each leaf to detect actual file changes
 		const leafFiles = new WeakMap<WorkspaceLeaf, string>();
+		let lastActiveLeaf: WorkspaceLeaf | null = null;
 
 		// Register event to refresh headers/footers when a file is opened or a tab's content changes
 		this.registerEvent(
@@ -91,8 +92,12 @@ export default class JotsPlugin extends Plugin {
 				const currentFilePath = file.path;
 				const previousFilePath = leafFiles.get(leaf);
 
-				// Only refresh if this leaf is showing a different file than before
-				if (currentFilePath !== previousFilePath) {
+				// Check if we've switched to a different leaf (tab switch) or different file
+				const isTabSwitch = lastActiveLeaf && lastActiveLeaf !== leaf;
+				const isFileChange = currentFilePath !== previousFilePath;
+
+				// Process the view if it's a tab switch or file change
+				if (isTabSwitch || isFileChange) {
 					// Clean up old renderer if it exists
 					const oldRenderer = this.contentRenderers.get(view);
 					if (oldRenderer) {
@@ -104,9 +109,47 @@ export default class JotsPlugin extends Plugin {
 					// Update tracked file for this leaf
 					leafFiles.set(leaf, currentFilePath);
 				}
+
+				// Update the last active leaf
+				lastActiveLeaf = leaf;
 			})
 		);
+		// Register event for tab switching (more reliable for detecting when user switches between tabs)
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', (leaf) => {
+				if (!leaf || !(leaf.view instanceof MarkdownView)) return;
 
+				// Only process if we're switching to a different leaf
+				if (lastActiveLeaf !== leaf) {
+					const view = leaf.view;
+					if (view && view.file) {
+						console.debug('JOTS Assistant: Active leaf changed to:', view.file.path);
+
+						// Clean up old renderer if it exists
+						const oldRenderer = this.contentRenderers.get(view);
+						if (oldRenderer) {
+							oldRenderer.cleanup();
+							this.contentRenderers.delete(view);
+						}
+
+						// Process the view with multiple strategies to ensure it works
+						const processView = () => {
+							this.handleActiveViewChange();
+						};
+
+						// Try immediate processing
+						processView();
+
+						// Also try with a small delay in case DOM isn't ready
+						setTimeout(processView, 50);
+
+						// Update tracked file for this leaf
+						leafFiles.set(leaf, view.file.path);
+					}
+					lastActiveLeaf = leaf;
+				}
+			})
+		);
 		// Process initial view once layout is ready
 		this.app.workspace.onLayoutReady(() => {
 			if (!this.initialLayoutReadyProcessed) {
@@ -114,6 +157,20 @@ export default class JotsPlugin extends Plugin {
 				this.initialLayoutReadyProcessed = true;
 			}
 		});
+
+		// Handle mode changes (edit/preview) in markdown views
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => {
+				const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (activeView) {
+					// Small delay to ensure the mode change is complete
+					setTimeout(() => {
+						console.debug('JOTS Assistant: Layout changed, reprocessing view');
+						this.handleActiveViewChange();
+					}, 100);
+				}
+			})
+		);
 	}
 	onunload() {
 		console.log('JOTS Assistant: Unloading Plugin...');
@@ -207,18 +264,44 @@ export default class JotsPlugin extends Plugin {
 		this._processView(activeView);
 	}
 
+	/**
+	 * Force reprocessing of the current active view, useful for debugging or ensuring content is displayed
+	 */
+	public refreshCurrentView(): void {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (activeView) {
+			// Clean up existing renderer completely
+			const oldRenderer = this.contentRenderers.get(activeView);
+			if (oldRenderer) {
+				oldRenderer.cleanup();
+				this.contentRenderers.delete(activeView);
+			}
+
+			// Force reprocessing
+			this._processView(activeView);
+		}
+	}
 	private async _processView(view: MarkdownView | null): Promise<void> {
 		if (!view || !view.file) return;
+
+		console.debug('JOTS Assistant: Processing view for file:', view.file.path);
 
 		// Clean up old content
 		const oldRenderer = this.contentRenderers.get(view);
 		if (oldRenderer) {
+			console.debug('JOTS Assistant: Cleaning up old renderer');
 			oldRenderer.cleanup();
 		}
 
 		// Get applicable rules and content
 		const applicableRules = this.ruleProcessor.getApplicableRules(view.file);
-		if (applicableRules.length === 0) return;
+		console.debug('JOTS Assistant: Found applicable rules:', applicableRules.length);
+
+		if (applicableRules.length === 0) {
+			// Clean up any existing renderer if no rules apply
+			this.contentRenderers.delete(view);
+			return;
+		}
 
 		// Create content strings
 		let headerContent = "";
@@ -232,6 +315,8 @@ export default class JotsPlugin extends Plugin {
 			if (footer) footerContent += footer + "\n\n";
 		}
 
+		console.debug('JOTS Assistant: Content generated - Header:', !!headerContent, 'Footer:', !!footerContent);
+
 		// Create and store new renderer
 		const renderer = new ContentRenderer(this, view.leaf);
 		this.contentRenderers.set(view, renderer);
@@ -240,8 +325,21 @@ export default class JotsPlugin extends Plugin {
 		const headerElement = headerContent ? await renderer.createHeaderContent(headerContent.trim()) : null;
 		const footerElement = footerContent ? await renderer.createFooterContent(footerContent.trim()) : null;
 
-		// Inject content
-		renderer.injectContent(headerElement, footerElement);
+		// Try multiple strategies to inject content to handle timing issues
+		const tryInjectContent = (attempt: number = 1) => {
+			console.debug(`JOTS Assistant: Injecting content (attempt ${attempt})`);
+			try {
+				renderer.injectContent(headerElement, footerElement);
+			} catch (error) {
+				console.error('JOTS Assistant: Error injecting content:', error);
+				if (attempt < 3) {
+					setTimeout(() => tryInjectContent(attempt + 1), 100 * attempt);
+				}
+			}
+		};
+
+		// Try immediate injection first
+		requestAnimationFrame(() => tryInjectContent());
 
 		// Observe the view for changes
 		this.viewManager.observeLeaf(view.leaf);
