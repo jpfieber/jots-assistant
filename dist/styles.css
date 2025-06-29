@@ -1,0 +1,305 @@
+.jots-settings-tabs {
+    padding-top: 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 12px;
+}
+
+/* Settings gear icon button */
+.setting-item-control button[aria-label*="settings"] {
+    background: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0;
+}
+
+.setting-item-control button[aria-label*="settings"] .svg-icon.lucide-settings {
+    color: var(--text-muted);
+}
+
+.setting-item-control button[aria-label*="settings"]:hover .svg-icon.lucide-settings {
+    color: var(--text-normal);
+}
+
+.jots-settings-tab {
+    margin-bottom: -1px;
+    padding: 6px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-block;
+    border: 1px solid transparent;
+    border-radius: 4px 4px 0 0;
+}
+
+.jots-settings-tab.is-active {
+    border: 1px solid var(--background-modifier-border);
+    border-bottom-color: var(--background-primary);
+    color: var(--text-accent);
+}
+
+.jots-settings-content:not(.is-active) {
+    display: none;
+}
+
+.jots-dependency-power {
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.8;
+    transform: scale(1.2);
+}
+
+.jots-dependency-power.is-active {
+    color: var(--color-green);
+    opacity: 1;
+    text-shadow: 0 0 8px var(--color-green);
+}
+
+.jots-dependency-power.is-inactive {
+    color: var(--color-red);
+    opacity: 1;
+    text-shadow: 0 0 8px var(--color-red);
+}
+
+.jots-dependency-container {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.jots-status {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.jots-status-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    width: 85px;
+}
+
+.jots-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--background-primary);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.jots-status-success {
+    background-color: var(--color-green);
+}
+
+.jots-status-error {
+    background-color: var(--color-red);
+}
+
+.jots-status-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.jots-status-description {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.jots-latest-version,
+.jots-installed-version {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.jots-latest-version {
+    margin-left: 8px;
+}
+
+.jots-version-newer {
+    color: var(--color-green);
+}
+
+.jots-version-outdated {
+    color: var(--color-orange);
+}
+
+.jots-repo-info {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.9em;
+}
+
+.jots-repo-link {
+    color: var(--text-accent);
+    text-decoration: none;
+}
+
+.jots-repo-link:hover {
+    text-decoration: underline;
+}
+
+.jots-settings-description {
+    font-size: 1em;
+    line-height: 1;
+    margin: 12px 0;
+    color: var(--text-normal);
+}
+
+/* --- Virtual Footer Styles --- */
+
+/* Rule container */
+.virtual-footer-rules-container {
+    margin-top: 1em;
+}
+
+/* Individual rule item */
+.virtual-footer-rule-item {
+    margin-bottom: 1em;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 0.5em;
+}
+
+/* Rule heading */
+.virtual-footer-rule-heading {
+    margin: 0;
+    padding: 0.5em;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Rule content container */
+.virtual-footer-rule-content {
+    padding: 0.5em;
+}
+
+/* Hide content when collapsed */
+.virtual-footer-rule-item.is-collapsed .virtual-footer-rule-content {
+    display: none;
+}
+
+/* Rule actions */
+.virtual-footer-rule-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1em;
+    padding-top: 1em;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.virtual-footer-actions-spacer {
+    flex: 1;
+}
+
+/* Buttons */
+.virtual-footer-move-button {
+    padding: 0 0.5em;
+}
+
+.virtual-footer-delete-button {
+    margin-left: auto;
+}
+
+/* Add button */
+.virtual-footer-add-button {
+    margin-top: 1em;
+    width: 100%;
+}
+
+/* Text areas */
+.virtual-footer-rule-content textarea {
+    min-height: 100px;
+    width: 100%;
+    font-family: var(--font-monospace);
+}
+
+/* --- Dynamic Content Styling --- */
+
+/* Base styles for dynamic content in all modes */
+.jots-dynamic-content-element {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Reading mode styles */
+.markdown-reading-view .markdown-preview-view {
+    position: relative;
+}
+
+.markdown-reading-view .markdown-preview-view .mod-header,
+.markdown-reading-view .markdown-preview-view .mod-footer {
+    width: 100%;
+    max-width: var(--file-line-width);
+    margin: 0 auto;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.markdown-reading-view .markdown-preview-view .mod-header .jots-dynamic-content-element,
+.markdown-reading-view .markdown-preview-view .mod-footer .jots-dynamic-content-element {
+    width: 100%;
+    margin: 0 auto;
+    padding: 1em var(--file-margins);
+}
+
+/* Source/Live Preview mode styles */
+.markdown-source-view.mod-cm6 .jots-header-container,
+.markdown-source-view.mod-cm6 .jots-footer-container {
+    width: 100%;
+    max-width: var(--file-line-width);
+    margin: 0 auto;
+    padding: 0 var(--file-margins);
+}
+
+.markdown-source-view.mod-cm6.is-readable-line-width .jots-header-container,
+.markdown-source-view.mod-cm6.is-readable-line-width .jots-footer-container {
+    width: var(--line-width);
+}
+
+/* Style wrapper div that MarkdownRenderer creates */
+.jots-header-container>div,
+.jots-footer-container>div {
+    margin: 0;
+    padding: 1em 0;
+}
+
+/* Remove extra margins */
+.jots-header-container>div>*:first-child,
+.jots-footer-container>div>*:first-child {
+    margin-top: 0;
+}
+
+.jots-header-container>div>*:last-child,
+.jots-footer-container>div>*:last-child {
+    margin-bottom: 0;
+}
+
+/* Fix layout in source mode */
+.markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex {
+    display: block;
+}
+
+/* Live Preview Adjustments */
+.jots-cm-padding {
+    padding-bottom: var(--p-spacing) !important;
+}
+
+.jots-remove-flex {
+    flex: 0 1 auto !important;
+}
+
+/* --- Core Overrides --- */
+
+/* Hide empty tag links that appear before actual tags */
+a.tag:empty {
+    display: none !important;
+}

@@ -238,7 +238,7 @@ export default class JotsPlugin extends Plugin {
 		const plugins = app.plugins;
 		const pluginDir = `${app.vault.configDir}/plugins/`;
 		const { adapter } = app.vault;
-		const managedPlugins = ['dataview', 'virtual-footer'];
+		const managedPlugins = ['dataview', 'virtual-footer', 'jots-body-tracker'];
 
 		for (const pluginId of managedPlugins) {
 			const pluginPath = `${pluginDir}${pluginId}/`;
