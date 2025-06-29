@@ -20,6 +20,11 @@ export const JOTS_PLUGINS = [
         repo: 'jpfieber/jots-food-tracker',
         name: 'Food Tracker',
         description: 'Track Your Nutrition Journey'
+    },
+    {
+        repo: 'jpfieber/jots-body-tracker',
+        name: 'Body Tracker',
+        description: 'Monitor Your Physical Progress'
     }
 ];
 

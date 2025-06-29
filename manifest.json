@@ -1,7 +1,7 @@
 {
 	"id": "jots-assistant",
 	"name": "JOTS Assistant",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"minAppVersion": "0.15.0",
 	"description": "Provides tools to assist with implementing JOTS in Obsidian.",
 	"author": "Joseph Fieber",
