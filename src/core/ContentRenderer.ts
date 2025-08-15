@@ -103,47 +103,42 @@ export class ContentRenderer {
         }
     } private injectSourceContent(headerContent: HTMLElement | null, footerContent: HTMLElement | null): void {
         const view = this.leaf.view as MarkdownView;
-        const editor = view.editor;
         const container = this.leaf.view.containerEl;
-
-        const cmContent = container.querySelector('.cm-content');
-        if (!cmContent) {
-            console.debug('JOTS Assistant: No .cm-content found for source mode injection');
-            return;
-        }
-
-        const cmSizer = cmContent.parentElement;
-        if (!cmSizer) {
-            console.debug('JOTS Assistant: No cm-sizer found for source mode injection');
-            return;
-        }
 
         // Clean up any existing containers first
         this.cleanup();
 
-        // Create and inject header if needed
+        // Header injection - use virtual-footer's approach
         if (headerContent) {
             const headerContainer = document.createElement('div');
             headerContainer.className = CSS_HEADER_CONTAINER;
             headerContainer.appendChild(headerContent);
-            cmSizer.insertBefore(headerContainer, cmContent);
-            console.debug('JOTS Assistant: Header injected in source mode');
+
+            // Find the content container and inject header BEFORE it
+            const cmContentContainer = container.querySelector('.cm-contentContainer');
+            if (cmContentContainer?.parentElement) {
+                cmContentContainer.parentElement.insertBefore(headerContainer, cmContentContainer);
+                console.debug('JOTS Assistant: Header injected using virtual-footer method');
+            } else {
+                console.debug('JOTS Assistant: Could not find cm-contentContainer for header injection');
+            }
         }
 
-        // Create and inject footer if needed
+        // Footer injection - back to virtual-footer's exact method
         if (footerContent) {
             const footerContainer = document.createElement('div');
             footerContainer.className = CSS_FOOTER_CONTAINER;
             footerContainer.appendChild(footerContent);
-            cmSizer.appendChild(footerContainer);
-            console.debug('JOTS Assistant: Footer injected in source mode');
+
+            const targetParent = container.querySelector('.cm-sizer');
+            if (targetParent) {
+                targetParent.appendChild(footerContainer);
+                console.debug('JOTS Assistant: Footer injected using virtual-footer exact method');
+            }
         }
 
-        // Adjust container styles for proper layout
-        const cmContentContainer = container.querySelector('.cm-contentContainer');
-        if (cmContentContainer) {
-            cmContentContainer.classList.add(CSS_REMOVE_FLEX);
-        }
+        // NO FLEXBOX - USING SIMPLE POSITIONING INSTEAD
+        // (Flexbox was causing text width issues with certain themes)
     } cleanup(): void {
         console.debug('JOTS Assistant: ContentRenderer cleanup called');
         const container = this.leaf.view.containerEl;
@@ -155,10 +150,6 @@ export class ContentRenderer {
         console.debug('JOTS Assistant: Removing', elements.length, 'content elements');
         elements.forEach(el => el.remove());
 
-        // Clean up styling
-        const cmContentContainer = container.querySelector('.cm-contentContainer');
-        if (cmContentContainer) {
-            cmContentContainer.classList.remove(CSS_REMOVE_FLEX);
-        }
+        // NO FLEXBOX CLEANUP NEEDED
     }
 }

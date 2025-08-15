@@ -222,54 +222,159 @@
     font-family: var(--font-monospace);
 }
 
+/* --- Events Styles --- */
+
+/* Events Table Styling */
+.events-table-container {
+    margin: 20px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.events-table-header {
+    display: grid;
+    grid-template-columns: 80px 1fr 120px 120px 100px;
+    gap: 1px;
+    background-color: var(--background-modifier-border-hover);
+    font-weight: 600;
+    border-bottom: 2px solid var(--background-modifier-border);
+}
+
+.events-header-cell {
+    padding: 10px 8px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.events-table-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 120px 120px 100px;
+    gap: 1px;
+    background-color: var(--background-modifier-border);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.events-table-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.events-table-row:last-child {
+    border-bottom: none;
+}
+
+.events-cell {
+    padding: 8px;
+    background-color: var(--background-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.events-enabled-col {
+    text-align: center;
+}
+
+.events-name-col {
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.events-name-col input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    padding: 4px;
+}
+
+.events-name-col input:focus {
+    background-color: var(--background-modifier-form-field);
+    border-radius: 3px;
+}
+
+.events-date-col input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    padding: 4px;
+    text-align: center;
+    font-family: var(--font-monospace);
+}
+
+.events-date-col input:focus {
+    background-color: var(--background-modifier-form-field);
+    border-radius: 3px;
+}
+
+.events-type-col select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    padding: 4px;
+}
+
+.events-type-col select:focus {
+    background-color: var(--background-modifier-form-field);
+    border-radius: 3px;
+}
+
+.events-actions-col {
+    gap: 4px;
+}
+
+.events-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.events-action-btn:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.events-delete-btn:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-error-hover);
+}
+
 /* --- Dynamic Content Styling --- */
+/* COMPLETELY MINIMAL - NO CSS CONSTRAINTS AT ALL */
 
-/* Base styles for dynamic content in all modes */
-.jots-dynamic-content-element {
-    width: 100%;
-    box-sizing: border-box;
+/* Position header at top */
+.markdown-source-view.mod-cm6 .jots-header-container {
+    margin-top: 1em;
+    padding: 0 20px;
 }
 
-/* Reading mode styles */
-.markdown-reading-view .markdown-preview-view {
-    position: relative;
-}
+/* Footer - copy virtual-footer's exact CSS */
+/* Note: Container styling handled by the specific selector below */
 
-.markdown-reading-view .markdown-preview-view .mod-header,
-.markdown-reading-view .markdown-preview-view .mod-footer {
-    width: 100%;
-    max-width: var(--file-line-width);
-    margin: 0 auto;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-.markdown-reading-view .markdown-preview-view .mod-header .jots-dynamic-content-element,
-.markdown-reading-view .markdown-preview-view .mod-footer .jots-dynamic-content-element {
-    width: 100%;
-    margin: 0 auto;
-    padding: 1em var(--file-margins);
-}
-
-/* Source/Live Preview mode styles */
-.markdown-source-view.mod-cm6 .jots-header-container,
-.markdown-source-view.mod-cm6 .jots-footer-container {
-    width: 100%;
-    max-width: var(--file-line-width);
-    margin: 0 auto;
-    padding: 0 var(--file-margins);
-}
-
-.markdown-source-view.mod-cm6.is-readable-line-width .jots-header-container,
-.markdown-source-view.mod-cm6.is-readable-line-width .jots-footer-container {
+.markdown-source-view.mod-cm6.is-readable-line-width .cm-sizer>.jots-footer-container {
+    max-width: var(--max-width);
     width: var(--line-width);
+    margin-inline: var(--content-margin);
 }
 
 /* Style wrapper div that MarkdownRenderer creates */
-.jots-header-container>div,
-.jots-footer-container>div {
+.jots-header-container>div {
     margin: 0;
     padding: 1em 0;
+}
+
+.jots-footer-container>div {
+    margin: 0;
+    padding: 0.5em 0;
 }
 
 /* Remove extra margins */
@@ -283,18 +388,31 @@
     margin-bottom: 0;
 }
 
-/* Fix layout in source mode */
+/* Fix layout in source mode - be more specific to avoid affecting content */
+/* TEMPORARILY DISABLED - CAUSING TEXT WIDTH ISSUES
 .markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex {
-    display: block;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
 }
+*/
+
+/* Don't interfere with the actual content area styling */
+/* .markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex .cm-content {
+    flex: 1 1 auto !important;
+} */
+
+/* Keep header and footer containers at proper width */
+/* TEMPORARILY DISABLED - CAUSING TEXT WIDTH ISSUES
+.markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex .jots-header-container,
+.markdown-source-view.mod-cm6 .cm-contentContainer.jots-remove-flex .jots-footer-container {
+    width: 100% !important;
+}
+*/
 
 /* Live Preview Adjustments */
 .jots-cm-padding {
     padding-bottom: var(--p-spacing) !important;
-}
-
-.jots-remove-flex {
-    flex: 0 1 auto !important;
 }
 
 /* --- Core Overrides --- */

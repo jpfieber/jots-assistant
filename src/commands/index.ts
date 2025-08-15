@@ -2,6 +2,7 @@ import { App } from 'obsidian';
 import { AddJotsCommand } from './addJots';
 import { AddJotsRangeCommand } from './addJotsRange';
 import { RefreshHeadersFootersCommand } from './refreshHeadersFooters';
+import { addEventsCommand } from './insertEvents';
 import { JotsSettings } from '../settings';
 import JotsPlugin from '../main';
 
@@ -19,4 +20,7 @@ export function registerCommands(plugin: JotsPlugin) {
     plugin.addCommand(addJotsCommand);
     plugin.addCommand(addJotsRangeCommand);
     plugin.addCommand(refreshHeadersFootersCommand);
+    
+    // Add events command
+    addEventsCommand(plugin);
 }

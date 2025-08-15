@@ -64,5 +64,8 @@ export const DEFAULT_SETTINGS: JotsSettings = {
     journalFolderPattern: 'YYYY/YYYY-MM',
     journalFilePattern: 'YYYY-MM-DD_ddd',
     personalAccessToken: '',
-    updateAtStartup: true
+    updateAtStartup: true,
+    events: [],
+    eventTaskLetter: 'e',
+    eventEmoji: '🎈'
 };

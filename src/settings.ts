@@ -5,6 +5,7 @@ import { GeneralSection } from './settings/sections/GeneralSection';
 import { AppearanceSection } from './settings/sections/AppearanceSection';
 import { JournalSection } from './settings/sections/JournalSection';
 import { HeadersFootersSection } from './settings/sections/HeadersFootersSection';
+import { EventsSection } from './settings/sections/EventsSection';
 
 // Re-export types that other files depend on
 export type { JotsSettings, Rule, JotsSectionFormat } from './types';
@@ -21,6 +22,7 @@ export class JotsSettingTab extends PluginSettingTab {
         appearance: AppearanceSection;
         journal: JournalSection;
         headersFooters: HeadersFootersSection;
+        events: EventsSection;
     };
 
     constructor(app: App, private plugin: JotsPlugin) {
@@ -31,7 +33,8 @@ export class JotsSettingTab extends PluginSettingTab {
             general: new GeneralSection(plugin, app),
             appearance: new AppearanceSection(plugin, app),
             journal: new JournalSection(plugin, app),
-            headersFooters: new HeadersFootersSection(plugin, app)
+            headersFooters: new HeadersFootersSection(plugin, app),
+            events: new EventsSection(plugin, app)
         };
     }
 
@@ -84,6 +87,9 @@ export class JotsSettingTab extends PluginSettingTab {
                 case 'headers-footers':
                     this.sections.headersFooters.display(activeTab.content);
                     break;
+                case 'events':
+                    this.sections.events.display(activeTab.content);
+                    break;
             }
         }
     }
@@ -102,6 +108,7 @@ export class JotsSettingTab extends PluginSettingTab {
         const jotsTab = this.createTab('jots', 'General');
         const appearanceTab = this.createTab('appearance', 'Appearance');
         const headersFootersTab = this.createTab('headers-footers', 'Headers/Footers');
+        const eventsTab = this.createTab('events', 'Events');
         const journalTab = this.createTab('journal', 'Journals');
 
         // Add tab buttons with data attributes

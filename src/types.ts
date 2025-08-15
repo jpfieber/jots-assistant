@@ -40,6 +40,9 @@ export interface JotsSettings {
     updateAtStartup: boolean; // Whether to auto-update plugins at startup
     rules: Rule[]; // Virtual Footer rules
     refreshOnFileOpen?: boolean; // Whether to refresh headers/footers on file open
+    events: Event[]; // Birthday and anniversary events
+    eventTaskLetter: string; // Global task letter for all events
+    eventEmoji: string; // Global emoji for all events
 }
 
 export interface SettingsTab {
@@ -63,6 +66,22 @@ export enum ContentSource {
 export enum RenderLocation {
     Footer = 'footer',
     Header = 'header',
+}
+
+// --- Events Types ---
+export enum EventType {
+    Birthday = 'Birthday',
+    Wedding = 'Wedding',
+    Anniversary = 'Anniversary',
+    Other = 'Other'
+}
+
+export interface Event {
+    id: string;
+    name: string;
+    date: string; // YYYY-MM-DD format
+    eventType: EventType;
+    enabled: boolean;
 }
 
 export interface Rule {

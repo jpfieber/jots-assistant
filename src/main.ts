@@ -199,6 +199,26 @@ export default class JotsPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		
+		// Migration: Remove old per-event taskLetter and emoji fields
+		if (this.settings.events) {
+			this.settings.events = this.settings.events.map(event => {
+				const cleanEvent = { ...event };
+				// Remove deprecated fields
+				delete (cleanEvent as any).taskLetter;
+				delete (cleanEvent as any).emoji;
+				return cleanEvent;
+			});
+		}
+		
+		// Migration: Ensure global event settings exist
+		if (!this.settings.eventTaskLetter) {
+			this.settings.eventTaskLetter = 'e';
+		}
+		if (!this.settings.eventEmoji) {
+			this.settings.eventEmoji = '🎈';
+		}
+		
 		this.ruleProcessor = new RuleProcessor(this.settings);
 		this.viewManager = new ViewEventManager();
 	}

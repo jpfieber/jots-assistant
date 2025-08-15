@@ -99,7 +99,8 @@ export class HeadersFootersSection {
             .addButton(button => button
                 .setButtonText('Add new rule')
                 .setCta()
-                .onClick(async () => {                    const newRule = {
+                .onClick(async () => {
+                    const newRule = {
                         name: 'New Rule',
                         enabled: true,
                         type: RuleType.Folder,
@@ -112,7 +113,7 @@ export class HeadersFootersSection {
                     this.plugin.settings.rules.push(newRule);
                     this.ruleExpandedStates.push(true);  // New rules start expanded
                     await this.plugin.saveSettings({ refreshType: 'content' });
-                    
+
                     // Just render the new rule at the end of the rules container                    const rulesContainer = containerEl.querySelector('.rules-container') as HTMLElement;
                     if (rulesContainer) {
                         this.renderRuleControls(newRule, this.plugin.settings.rules.length - 1, rulesContainer);
@@ -393,8 +394,11 @@ export class HeadersFootersSection {
             .setIcon('trash')
             .setTooltip('Delete rule')
             .onClick(async () => {
+                console.log('Delete button clicked for rule index:', index);
+                console.log('Current rules before delete:', this.plugin.settings.rules.length);
                 this.plugin.settings.rules.splice(index, 1);
                 this.ruleExpandedStates.splice(index, 1);
+                console.log('Rules after delete:', this.plugin.settings.rules.length);
                 await this.plugin.saveSettings({ refreshType: 'content' });
                 this.display(containerEl);
             }));
